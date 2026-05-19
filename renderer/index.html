@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.2</title>
+  <title>Luma Studio v1.3</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,7 +14,7 @@
       <div class="stars"></div>
       <div class="retro-panel splash-box">
         <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
-        <p class="subtitle">LUMA STUDIO v1.2</p>
+        <p class="subtitle">LUMA STUDIO v1.3</p>
         <p class="loading">NARRATIVE ENGINE<span id="dots">...</span></p>
       </div>
     </section>
@@ -71,12 +71,27 @@
 
         <section class="workspace">
           <header class="workspace-header">
-            <div>
-              <h1 id="workspaceTitle">ASSET LAB</h1>
-              <p id="workspaceSubtitle">Pipeline Luma : assets, logique, musique, dialogues et cinématiques.</p>
+            <div class="header-left">
+              <button id="btnSimulate" class="primary simulate-btn" title="Lancer le simulateur console">▶ SIMULER</button>
+              <div>
+                <h1 id="workspaceTitle">ASSET LAB</h1>
+                <p id="workspaceSubtitle">Pipeline Luma : assets, logique, musique, dialogues et cinématiques.</p>
+              </div>
             </div>
             <button id="saveAll" class="primary">SAUVEGARDER</button>
           </header>
+
+          <div class="capacity-bar-wrap">
+            <div class="capacity-bar-header">
+              <span class="capacity-label">📦 Capacité projet</span>
+              <span id="capacityText" class="capacity-text">0 o / 550 Ko</span>
+              <span id="capacityBreakdown" class="capacity-breakdown">— sprites: 0 · audio: 0 · maps: 0 · code: 0 —</span>
+            </div>
+            <div class="capacity-bar-track">
+              <div id="capacityBarFill" class="capacity-bar-fill" style="width:0%"></div>
+              <div id="capacityBarMarker" class="capacity-bar-marker" style="left:80%" title="80% — alerte"></div>
+            </div>
+          </div>
 
           <section id="assetPanel" class="panel active">
             <div class="help-box"><strong>Asset Lab :</strong> import, découpe et estimation mémoire RGB565.</div>
@@ -160,25 +175,7 @@
           </section>
 
           <section id="musicPanel" class="panel">
-            <div class="help-box"><strong>V0.6 :</strong> éditeur musique 8-bit pour deux piezo buzzers.</div>
-            <div class="two-cols">
-              <section class="tool-panel">
-                <h2>Paramètres</h2>
-                <label>Nom musique</label><input id="songName" value="theme_01" />
-                <label>Tempo BPM</label><input id="songTempo" type="number" value="120" />
-                <label>Buzzer</label><select id="trackSelect"><option value="A">Buzzer A</option><option value="B">Buzzer B</option></select>
-                <label>Note</label><select id="noteSelect"><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option><option>REST</option></select>
-                <label>Octave</label><select id="octaveSelect"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
-                <label>Durée</label><select id="durationSelect"><option value="125">1/16</option><option value="250" selected>1/8</option><option value="500">1/4</option><option value="1000">1/2</option></select>
-                <button id="addNote" class="primary full">AJOUTER NOTE</button>
-                <button id="playMusic" class="secondary full">PLAY / STOP</button>
-              </section>
-              <section class="tool-panel">
-                <h2>Séquence</h2>
-                <div class="track"><h3>Buzzer A</h3><div id="trackA" class="data-list"></div></div>
-                <div class="track"><h3>Buzzer B</h3><div id="trackB" class="data-list"></div></div>
-              </section>
-            </div>
+            <!-- contenu généré par music-editor.js V1.3 (piano roll) -->
           </section>
 
           <section id="narrativePanel" class="panel">
@@ -423,5 +420,7 @@
   <script src="sprite-editor.js"></script>
   <script src="gif-encoder.js"></script>
   <script src="animation-editor.js"></script>
+  <script src="music-editor.js"></script>
+  <script src="simulator.js"></script>
 </body>
 </html>

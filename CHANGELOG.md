@@ -1,89 +1,91 @@
 # CHANGELOG
 
-## V1.2 — Layers, GIF & ESP32 sprite rendering
+## V1.3 — Music Piano Roll, Simulator, Capacity Bar
 
 ### Nouveautés majeures
 
-**Sprite Editor — Layers multi-pile** :
-- Refonte du state : `state.layers[]` au lieu d'un seul `pixels`. Chaque
-  layer = `{id, name, visible, opacity, pixels}`. `state.pixels` reste
-  un alias vers le buffer actif pour minimiser le diff sur le code de
-  dessin.
-- `compositeAllLayers()` : combine tous les layers visibles en un seul
-  Uint16Array. Le canvas, le preview et les stats utilisent la composition.
-- `addLayer / deleteLayer / moveLayer / mergeLayerDown / setActiveLayer
-  / toggleLayerVisibility / setLayerOpacity / renameLayer` : API complète.
-- Panel layers dans la sidebar droite avec contrôles ●/○, slider opacity,
-  ▲▼ move, ⬇ merge down, × delete.
-- `pushHistory` et `restoreSnapshot` snapshot tous les layers.
-- Frame ops (flip H/V, rotate 90°, resize) itèrent sur tous les layers.
-- `loadFrameLayers` : compat V1.1 — `pixelsB64` top-level devient layer "Base".
-- `commitFramePixels` sérialise tous les layers ET la composition flat
-  (`pixelsB64`) pour rétrocompat et animation editor.
-- Pipette lit la composition, pas juste le layer actif.
+**Music Editor V1.3 — Piano Roll** (`renderer/music-editor.js`, 557 lignes) :
+- Refonte complète, remplace l'ancien UI basé sur boutons sequentiels.
+- Grille piano roll 36 lignes (C3 → B5) × 4-64 steps configurables.
+- 2 tracks parallèles (Buzzer A vert / Buzzer B jaune) avec loop indépendant.
+- 9 presets sonores avec seeds (main theme, boss, ambient, blaster, explosion,
+  coin, jump, hit, blank).
+- Aiguille de lecture animée + scroll horizontal auto.
+- Audio Web Audio square waves (forme d'onde piézo authentique).
+- Pré-écoute au clic sur une cellule.
+- Stats live : notes par track, durée, BPM, steps, octets.
+- Indicateur de note en cours pendant le play (`Status A: G4`).
+- Model `music.grid[track][step] = {note, octave} | null` avec rebuild
+  automatique de `music.tracks` (format ESP32) pour rétrocompat moteur.
 
-**Export GIF animé** :
-- `renderer/gif-encoder.js` : encoder GIF89a complet (~240 lignes).
-  ByteStream, BitWriter (LSB-first), lzwEncode (codes variable-length,
-  reset dictionnaire à 4096), Netscape 2.0 loop extension, sub-blocks.
-- API `LumaGifEncoder(w, h)` : `setPalette`, `addFrame(indices, delayMs, transparentIdx)`, `finish()`.
-- Bouton `📽 GIF (×4)` et `📽 GIF (×1)` dans l'animation editor.
-- Build dynamique de la palette (max 255 couleurs uniques + index 0 =
-  transparent). Centrage des frames de tailles différentes. Download
-  via Blob.
-- Validé avec PIL : magic GIF89a, frames lues correctement, loop infini,
-  durées per-frame respectées.
+**Simulator console** (`renderer/simulator.js`, 584 lignes) :
+- Bouton `▶ SIMULER` vert dans le header (visible en permanence).
+- Overlay full-screen avec bezel console + canvas 160×128 scale ×4.
+- Framebuffer Uint16Array 160×128 RGB565, flush → ImageData → canvas.
+- Effet LCD striping horizontal subtil (8% alpha).
+- 30 FPS via requestAnimationFrame + timing TICK_MS 33ms.
+- Logique miroir du moteur ESP32 :
+  - `canStandAt()` 4 coins + sliding X/Y séparé
+  - `centerCamera()` clamp 4 bords
+  - `isSolidAt()` lecture `map.layers.collision`
+  - rendu tiles palette identique (TILE_PALETTE 8 couleurs)
+  - blit sprite RGB565 si premier frame édité disponible
+- Audio Web Audio square waves monophoniques par buzzer (vraie forme piézo).
+- Mini-font 4×6 pour le texte UI (alphabet + chiffres + symboles).
+- Inputs clavier (flèches, ZQSD/WASD, Z=A, X=B, ESC=quit).
+- D-pad virtuel à l'écran (pointerdown/up) pour test tactile.
+- Lecture musique projet en boucle synchronisée sur step + loop A/B.
+- FPS counter + position joueur/caméra live.
 
-**Rendu sprite RGB565 sur ESP32** :
-- `main.js` :
-  - `buildSpriteFile(frame)` : encode `[2B w LE | 2B h LE | w*h*2 bytes pixels BE]`
-    avec byte-swap intégré pour ST7735.
-  - `makeLPK` : injecte automatiquement `sprites/<frame_id>.spr` pour
-    chaque frame du projet ayant un pixelsB64.
-- `luma_lpk.h/.c` : ajout `luma_lpk_read_sprite(lpk, name, *w, *h, pixels, max_pixels)`
-  qui décode le format binaire et byte-swap BE→LE en RAM ESP32.
-- `luma_render.h/.c` : ajout `luma_render_blit_rgb565(x, y, w, h, pixels, transparent)`.
-  Implémentation ligne par ligne avec regroupement des segments contigus
-  opaques en un seul `lcd_set_addr + lcd_data` (minimise les appels SPI).
-  Clipping automatique aux bords de l'écran. Byte-swap LE→BE intégré.
-- `luma_types.h` : ajout `LUMA_MAX_SPRITE_DIM 64`, `LUMA_MAX_SPRITE_PIXELS`,
-  et champs `player_sprite_loaded/w/h/pixels[]` dans `luma_runtime_t`
-  (8 Ko en plus dans la struct, OK pour ESP32).
-- `main.c` : précharge le premier sprite trouvé dans le LPK comme sprite
-  joueur après `luma_runtime_init`.
-- `luma_runtime.c` : `player_size(rt)` utilise la dim du sprite chargé ;
-  fallback `PLAYER_DEFAULT_SIZE 12`. `luma_runtime_init` initialise les
-  nouveaux champs.
-- `luma_render.c` : `luma_render_runtime` utilise `luma_render_blit_rgb565`
-  pour le joueur si sprite chargé, fallback sur rect jaune sinon.
+**Capacity Bar live** (`renderer/app.js` updateCapacityBar) :
+- Grand rectangle bleu sticky en haut de chaque panneau du studio.
+- Affichage `XXX.X Ko / YYY Ko (NN%)` + barre de progression.
+- Gradient vert (<80%) → jaune (80-95%) → rouge (>95%).
+- Marker rouge à 80% pour alerte visuelle.
+- Breakdown live : 🎨 sprites · 🎵 audio · 🗺 maps · ⚙ code.
+- Appelée automatiquement depuis `updateMemory()` et `renderAll()`,
+  + à chaque modif du music editor via `LumaMusicEditor.getByteSize()`.
 
-**Roundtrip pixels validé** :
-- JS Uint16Array LE → buildSpriteFile (swap LE→BE) → décode ESP32 (swap
-  BE→LE) → match parfait sur tous les pixels.
-- GIF encoder validé avec PIL sur palette 4 couleurs (2 frames) ET 16
-  couleurs (5 frames).
+### Modifications techniques
+
+- `index.html` :
+  - Bouton `#btnSimulate` ajouté dans `.workspace-header > .header-left`.
+  - Bloc `.capacity-bar-wrap` inséré entre header et `.panel`.
+  - `<section id="musicPanel">` vidé pour remplissage par music-editor.js.
+  - Scripts `music-editor.js` et `simulator.js` chargés après animation-editor.
+- `app.js` :
+  - Suppression du code legacy music (addNote, playMusic, scheduleTrack,
+    activeOscillators, noteFreq, renderMusic).
+  - `saveAll` appelle `LumaMusicEditor.rebuildTracksFromGrid()` avant save.
+  - `renderAll` appelle `LumaMusicEditor.refresh()` et `updateCapacityBar()`.
+  - Nouvelle fonction `updateCapacityBar()` qui calcule sprites + audio +
+    maps + code et met à jour la barre.
+- `style.css` : +450 lignes pour piano roll, simulator, capacity bar.
 
 ### Version bumps
 
-- `package.json` 1.1.0 → 1.2.0
-- `lumaStudioVersion` et manifest → 1.2.0
-- `LUMA_VERSION` C → 1.2.0
-- Titre fenêtre + splash → v1.2
+- `package.json` 1.2.0 → 1.3.0
+- `lumaStudioVersion` et manifest → 1.3.0
+- `LUMA_VERSION` C → 1.3.0
+- Titre fenêtre + splash → v1.3
 
-### Aucune régression V1.1
+### Aucune régression V1.2
 
-Tous les fixes V1.0.1 + features V1.1 (sprite editor, animation editor,
-color ramps, onion skin, mirror, pixel-perfect, undo/redo 100, palette
-DB32) sont conservés et fonctionnent au-dessus du nouveau système de layers.
+Tous les fixes V1.0.1 + features V1.1 (sprite editor, animation editor) +
+V1.2 (layers, GIF, sprite RGB565 ESP32) sont conservés et fonctionnels.
+Format `music.tracks` legacy reconstruit automatiquement à la sauvegarde
+pour compat avec le moteur ESP32.
 
 ---
 
+## V1.2 — Layers, GIF & ESP32 sprite rendering
+
+Voir CHANGELOG V1.2 dans archive antérieure.
+
 ## V1.1 — Sprite Editor & Animation Editor
 
-Ajout du sprite editor pixel-art (overlay plein écran) et de l'animation
-editor (timeline drag/drop). Voir CHANGELOG V1.1 dans une version
-antérieure pour le détail.
+Voir CHANGELOG V1.1 dans archive antérieure.
 
 ## V1.0.1 — Patch correctif (15 bugs)
 
-Voir CHANGELOG V1.0.1 dans une version antérieure pour le détail.
+Voir CHANGELOG V1.0.1 dans archive antérieure.

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define LUMA_VERSION "1.2.0"
+#define LUMA_VERSION "1.3.0"
 
 // Screen
 #define LUMA_LCD_WIDTH   160

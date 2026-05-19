@@ -210,6 +210,46 @@ function updateMemory() {
   $("frameCount").textContent = `${frames.length} frame${frames.length > 1 ? "s" : ""}`;
   $("memBar").style.width = `${percent}%`;
   $("memBar").style.background = percent > 90 ? "#ff5e57" : percent > 65 ? "#fff25a" : "#4dff77";
+  updateCapacityBar();
+}
+
+// V1.3 — Capacity bar globale dans le header
+function updateCapacityBar() {
+  const txt = $("capacityText");
+  const fill = $("capacityBarFill");
+  const breakdown = $("capacityBreakdown");
+  if (!txt || !fill) return;
+
+  let sprites = 0;
+  for (const f of frames) sprites += f.rgb565Bytes || 0;
+  let audio = 0;
+  if (window.LumaMusicEditor && typeof music !== "undefined") {
+    audio = window.LumaMusicEditor.getByteSize();
+  }
+  let maps_bytes = 0;
+  if (typeof maps !== "undefined") {
+    for (const m of maps) {
+      const tiles = (m.width || 0) * (m.height || 0);
+      maps_bytes += tiles * 3; // 3 layers d'octets
+    }
+  }
+  let code = 0;
+  if (typeof objects !== "undefined") code += objects.length * 64;
+  if (typeof events !== "undefined") code += events.length * 96;
+  if (typeof dialogues !== "undefined") code += dialogues.reduce((a, d) => a + (d.text || "").length + 64, 0);
+  if (typeof animations !== "undefined") code += animations.reduce((a, an) => a + (an.slots ? an.slots.length * 16 : 0) + 64, 0);
+
+  const total = sprites + audio + maps_bytes + code;
+  const pct = Math.max(0, Math.min(100, (total / projectLimitBytes) * 100));
+  txt.textContent = `${formatBytes(total)} / ${formatBytes(projectLimitBytes)} (${Math.round(pct)}%)`;
+  fill.style.width = pct + "%";
+  if (pct > 95) fill.style.background = "linear-gradient(90deg, #ff5e57, #ff8a80)";
+  else if (pct > 80) fill.style.background = "linear-gradient(90deg, #fff25a, #ffd700)";
+  else fill.style.background = "linear-gradient(90deg, #4dff77, #5fffaa)";
+
+  if (breakdown) {
+    breakdown.textContent = `🎨 ${formatBytes(sprites)} · 🎵 ${formatBytes(audio)} · 🗺 ${formatBytes(maps_bytes)} · ⚙ ${formatBytes(code)}`;
+  }
 }
 
 function formatBytes(bytes) {
@@ -242,69 +282,8 @@ $("addEvent").addEventListener("click", () => {
 });
 
 // V0.6 Music
-$("addNote").addEventListener("click", () => {
-  music.name = $("songName").value || "theme_01";
-  music.tempo = Number($("songTempo").value) || 120;
-  const track = $("trackSelect").value;
-  music.tracks[track].push({
-    note: $("noteSelect").value,
-    octave: Number($("octaveSelect").value),
-    duration: Number($("durationSelect").value)
-  });
-  renderMusic();
-});
-
-$("playMusic").addEventListener("click", () => {
-  if (playing) {
-    playing = false;
-    if (audioCtx) {
-      // Stop tous les oscillateurs actifs
-      activeOscillators.forEach(osc => { try { osc.stop(); } catch (_) {} });
-      activeOscillators = [];
-    }
-    return;
-  }
-  if (!audioCtx) audioCtx = new AudioContext();
-  playing = true;
-  activeOscillators = [];
-  const startAt = audioCtx.currentTime + 0.05;
-  // Bug #14 fix: les deux pistes partagent la MÊME base de temps de départ
-  scheduleTrack("A", startAt);
-  scheduleTrack("B", startAt);
-});
-
-let activeOscillators = [];
-
-function scheduleTrack(trackName, baseTime) {
-  let time = baseTime;
-  const track = music.tracks[trackName];
-  let lastEnd = time;
-  for (const n of track) {
-    const dur = n.duration / 1000;
-    if (n.note !== "REST") {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = "square";
-      osc.frequency.value = noteFreq(n.note, n.octave);
-      gain.gain.value = 0.05;
-      osc.connect(gain).connect(audioCtx.destination);
-      osc.start(time);
-      osc.stop(time + dur);
-      activeOscillators.push(osc);
-    }
-    time += dur;
-    lastEnd = time;
-  }
-  setTimeout(() => {
-    // Marque inactif quand la piste la plus longue est terminée
-    if (audioCtx && lastEnd <= audioCtx.currentTime + 0.05) playing = false;
-  }, Math.max(100, (lastEnd - baseTime) * 1000 + 50));
-}
-
-function noteFreq(note, octave) {
-  const semis = { C:-9, D:-7, E:-5, F:-4, G:-2, A:0, B:2 };
-  return 440 * Math.pow(2, (semis[note] + (octave - 4) * 12) / 12);
-}
+// V1.3 : tout le music UI est géré par music-editor.js (piano roll).
+// L'ancien éditeur basé sur boutons addNote/playMusic a été retiré.
 
 // V1.0 Narrative
 $("importPortrait").addEventListener("click", async () => {
@@ -365,6 +344,8 @@ $("addTrigger").addEventListener("click", () => {
 $("saveAll").addEventListener("click", async () => {
   // Sync les anims depuis le module si nécessaire
   if (window.LumaAnimEditor) animations = window.LumaAnimEditor.getAnimations() || animations;
+  // V1.3 : reconstruit music.tracks depuis music.grid pour le moteur ESP32
+  if (window.LumaMusicEditor) window.LumaMusicEditor.rebuildTracksFromGrid();
   await window.lumaAPI.saveFrames(frames);
   if (window.lumaAPI.saveAnimations) await window.lumaAPI.saveAnimations(animations);
   await window.lumaAPI.saveLogic({ objects, events, variables: [] });
@@ -394,20 +375,19 @@ function renderList(id, items, map) {
 
 function renderObjects() { renderList("objectsList", objects, o => `<strong>${o.name}</strong><br>${o.type}<br>Behavior: ${o.behavior}<br>Tags: ${o.tags.join(", ")}`); }
 function renderEvents() { renderList("eventsList", events, e => `<strong>${e.name}</strong><br>IF ${e.condition}<br>THEN ${e.action} → ${e.target}`); }
-function renderMusic() {
-  renderList("trackA", music.tracks.A, n => `<strong>${n.note}${n.note !== "REST" ? n.octave : ""}</strong> — ${n.duration}ms`);
-  renderList("trackB", music.tracks.B, n => `<strong>${n.note}${n.note !== "REST" ? n.octave : ""}</strong> — ${n.duration}ms`);
-}
+// V1.3 : music rendering géré par music-editor.js
 function renderDialogues() { renderList("dialoguesList", dialogues, d => `<strong>${d.id}</strong><br>${d.speaker}: ${d.text}<br>next: ${d.next || "-"}`); }
 function renderCutSteps() { renderList("cutSteps", currentCutSteps, s => `<strong>${s.time}s</strong> ${s.action}<br>${s.target} ${s.value}`); }
 function renderCutscenes() { renderList("cutscenesList", cutscenes, c => `<strong>${c.id}</strong><br>${c.steps.length} step(s)`); }
 function renderTriggers() { renderList("triggersList", triggers, t => `<strong>${t.id}</strong><br>IF ${t.condition}<br>THEN ${t.action} → ${t.target}`); }
 function renderAll() {
-  renderObjects(); renderEvents(); renderMusic(); renderDialogues(); renderCutscenes(); renderTriggers(); renderSceneEditor();
+  renderObjects(); renderEvents(); renderDialogues(); renderCutscenes(); renderTriggers(); renderSceneEditor();
   if (window.LumaAnimEditor) {
     window.animations = animations;
     window.LumaAnimEditor.setAnimations(animations);
   }
+  if (window.LumaMusicEditor) window.LumaMusicEditor.refresh();
+  updateCapacityBar();
 }
 
 
