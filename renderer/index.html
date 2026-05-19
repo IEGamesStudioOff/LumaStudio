@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v0.4</title>
+  <title>Luma Studio v0.5</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -59,7 +59,7 @@
         <button class="nav-btn disabled" id="navSprite">SPRITE EDITOR</button>
         <button class="nav-btn disabled" id="navAnim">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
-        <button class="nav-btn disabled">EVENTS</button>
+        <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
         <div class="project-path" id="projectPath">Aucun projet</div>
       </aside>
 
@@ -72,6 +72,7 @@
           <div class="header-buttons">
             <button id="openSpriteEditor"    class="secondary disabled" disabled>OUVRIR ÉDITEUR</button>
             <button id="openAnimationEditor" class="secondary disabled" disabled>ANIMATIONS</button>
+            <button id="openObjectEventDb" class="secondary">OBJECTS / EVENTS</button>
             <button id="exportLpk"           class="secondary">EXPORT .LPK</button>
             <button id="importImage"         class="primary">IMPORTER IMAGE / GIF</button>
           </div>
@@ -179,7 +180,7 @@
         <button class="nav-btn active">SPRITE EDITOR</button>
         <button class="nav-btn disabled">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
-        <button class="nav-btn disabled">EVENTS</button>
+        <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
       </aside>
 
       <section class="workspace">
@@ -268,7 +269,7 @@
         <button class="nav-btn disabled">SPRITE EDITOR</button>
         <button class="nav-btn active">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
-        <button class="nav-btn disabled">EVENTS</button>
+        <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
       </aside>
 
       <section class="workspace">
@@ -346,6 +347,238 @@
       </section>
     </div>
   </section>
+
+
+  <!-- OBJECT / EVENT DATABASE -->
+  <section id="objectEventDb" class="screen lab-screen">
+    <div class="scanlines"></div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
+        <button class="nav-btn" id="navAssetFromDb">ASSET LAB</button>
+        <button class="nav-btn disabled">SPRITE EDITOR</button>
+        <button class="nav-btn disabled">ANIMATIONS</button>
+        <button class="nav-btn active">OBJECTS / EVENTS</button>
+        <div class="project-path" id="dbProjectPath">Base logique V0.5</div>
+      </aside>
+
+      <section class="workspace">
+        <header class="workspace-header">
+          <div>
+            <h1>OBJECT / EVENT DATABASE</h1>
+            <p>Décris les objets, variables et règles du jeu avant la map. C'est le cerveau du moteur Luma.</p>
+          </div>
+          <div class="header-buttons">
+            <button id="dbBack" class="secondary">← RETOUR</button>
+            <button id="dbLoad" class="secondary">CHARGER</button>
+            <button id="dbSave" class="primary">SAUVEGARDER</button>
+            <button id="dbExport" class="secondary">EXPORT LOGIC .LUMA</button>
+          </div>
+        </header>
+
+        <div class="help-box">
+          <strong>V0.5 :</strong>
+          un objet est une fiche de gameplay. Un event est une règle IF/THEN. Les variables peuvent être globales, scène ou objet.
+          Cette base sera plus tard compilée dans <code>game.luma</code>.
+        </div>
+
+        <div class="db-tabs">
+          <button class="db-tab active" data-db-tab="objects">OBJETS</button>
+          <button class="db-tab" data-db-tab="events">EVENTS</button>
+          <button class="db-tab" data-db-tab="variables">VARIABLES</button>
+          <button class="db-tab" data-db-tab="analyzer">ANALYSE</button>
+        </div>
+
+        <section id="dbObjects" class="db-page active">
+          <div class="db-grid">
+            <section class="db-list-panel">
+              <div class="db-panel-title">
+                <h2>Objets du jeu</h2>
+                <button id="newObject" class="secondary small">+ OBJET</button>
+              </div>
+              <div id="objectList" class="db-list"></div>
+            </section>
+
+            <section class="db-edit-panel">
+              <h2>Fiche objet</h2>
+              <div class="two-cols">
+                <div>
+                  <label>Nom objet</label>
+                  <input id="objName" placeholder="player" />
+                </div>
+                <div>
+                  <label>Type</label>
+                  <select id="objType">
+                    <option value="PLAYER">PLAYER</option>
+                    <option value="ENEMY">ENEMY</option>
+                    <option value="NPC">NPC</option>
+                    <option value="ITEM">ITEM</option>
+                    <option value="PROJECTILE">PROJECTILE</option>
+                    <option value="DOOR">DOOR</option>
+                    <option value="TRIGGER">TRIGGER</option>
+                    <option value="DECORATION">DECORATION</option>
+                    <option value="BOSS">BOSS</option>
+                    <option value="SAVE_POINT">SAVE_POINT</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="two-cols">
+                <div>
+                  <label>Sprite idle / frame</label>
+                  <input id="objSprite" placeholder="player_idle" />
+                </div>
+                <div>
+                  <label>Animations liées</label>
+                  <input id="objAnimations" placeholder="idle_down, walk_down, attack" />
+                </div>
+              </div>
+
+              <h2>Hitbox</h2>
+              <div class="four-cols">
+                <input id="hitX" type="number" value="0" title="x" />
+                <input id="hitY" type="number" value="0" title="y" />
+                <input id="hitW" type="number" value="16" title="w" />
+                <input id="hitH" type="number" value="16" title="h" />
+              </div>
+
+              <h2>Stats</h2>
+              <div class="four-cols">
+                <input id="objSpeed" type="number" step="0.1" value="1.0" title="speed" />
+                <input id="objHealth" type="number" value="1" title="health" />
+                <input id="objDamage" type="number" value="0" title="damage" />
+                <select id="objSolid"><option value="true">solid</option><option value="false">not solid</option></select>
+              </div>
+
+              <div class="two-cols">
+                <div>
+                  <label>Tags</label>
+                  <input id="objTags" placeholder="player, solid, interactive" />
+                </div>
+                <div>
+                  <label>Variables objet</label>
+                  <input id="objVars" placeholder="ammo:number=8, hp:number=3" />
+                </div>
+              </div>
+
+              <label>Behaviors</label>
+              <div id="behaviorChecks" class="check-grid"></div>
+
+              <div class="editor-actions">
+                <button id="saveObject" class="primary">APPLIQUER OBJET</button>
+                <button id="deleteObject" class="danger">SUPPRIMER OBJET</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="dbEvents" class="db-page">
+          <div class="db-grid">
+            <section class="db-list-panel">
+              <div class="db-panel-title">
+                <h2>Events</h2>
+                <button id="newEvent" class="secondary small">+ EVENT</button>
+              </div>
+              <div id="eventList" class="db-list"></div>
+            </section>
+
+            <section class="db-edit-panel">
+              <h2>Event IF / THEN</h2>
+              <div class="two-cols">
+                <div>
+                  <label>Nom event</label>
+                  <input id="eventName" placeholder="open_red_door" />
+                </div>
+                <div>
+                  <label>Activé</label>
+                  <select id="eventEnabled"><option value="true">enabled</option><option value="false">disabled</option></select>
+                </div>
+              </div>
+
+              <div class="event-builder">
+                <section>
+                  <div class="db-panel-title">
+                    <h2>Conditions IF</h2>
+                    <button id="addCondition" class="secondary small">+ CONDITION</button>
+                  </div>
+                  <div id="conditionsList" class="rule-list"></div>
+                </section>
+                <section>
+                  <div class="db-panel-title">
+                    <h2>Actions THEN</h2>
+                    <button id="addAction" class="secondary small">+ ACTION</button>
+                  </div>
+                  <div id="actionsList" class="rule-list"></div>
+                </section>
+              </div>
+
+              <div class="editor-actions">
+                <button id="saveEvent" class="primary">APPLIQUER EVENT</button>
+                <button id="deleteEvent" class="danger">SUPPRIMER EVENT</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="dbVariables" class="db-page">
+          <div class="db-variable-grid">
+            <section class="db-edit-panel">
+              <h2>Créer variable</h2>
+              <div class="two-cols">
+                <div>
+                  <label>Scope</label>
+                  <select id="varScope">
+                    <option value="global">global</option>
+                    <option value="scene">scene</option>
+                    <option value="object">object</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Type</label>
+                  <select id="varType">
+                    <option value="bool">bool</option>
+                    <option value="number">number</option>
+                    <option value="string">string</option>
+                  </select>
+                </div>
+              </div>
+              <label>Nom</label>
+              <input id="varName" placeholder="has_red_key" />
+              <label>Valeur par défaut</label>
+              <input id="varDefault" placeholder="false / 0 / texte" />
+              <button id="addVariable" class="primary full">AJOUTER VARIABLE</button>
+            </section>
+
+            <section class="db-edit-panel">
+              <h2>Variables globales</h2>
+              <div id="varsGlobal" class="db-list compact"></div>
+            </section>
+            <section class="db-edit-panel">
+              <h2>Variables scène</h2>
+              <div id="varsScene" class="db-list compact"></div>
+            </section>
+            <section class="db-edit-panel">
+              <h2>Variables objet</h2>
+              <div id="varsObject" class="db-list compact"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="dbAnalyzer" class="db-page">
+          <div class="db-edit-panel">
+            <div class="db-panel-title">
+              <h2>Analyse du jeu</h2>
+              <button id="runAnalyzer" class="primary small">ANALYSER</button>
+            </div>
+            <div id="analyzerOutput" class="analyzer-output">
+              Clique sur ANALYSER pour vérifier les objets sans sprite, events vides, variables doublons, portes sans destination, etc.
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </section>
+
 
 </main>
 

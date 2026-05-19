@@ -1,7 +1,7 @@
 {
   "name": "luma-studio",
-  "version": "0.4.0",
-  "description": "Luma Studio - éditeur rétro no-code pour la console Luma (NESmaker × Aseprite × Construct)",
+  "version": "0.5.0",
+  "description": "Luma Studio - éditeur rétro no-code pour la console Luma (Asset Lab, Sprite Editor, Animations, Object/Event DB)",
   "main": "main.js",
   "scripts": {
     "start": "electron ."

@@ -1,6 +1,6 @@
 /** Gestion des écrans (splash, project, assetLab, spriteEditor). */
 
-const SCREENS = ["splash", "project", "assetLab", "spriteEditor", "animationEditor"];
+const SCREENS = ["splash", "project", "assetLab", "spriteEditor", "animationEditor", "objectEventDb"];
 
 export function showScreen(id) {
   for (const s of SCREENS) {

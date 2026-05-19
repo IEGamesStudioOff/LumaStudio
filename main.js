@@ -72,6 +72,8 @@ ipcMain.handle("project:create", async (_event, project) => {
     "dialogues",
     "scenes",
     "objects",
+    "events",
+    "variables",
     "build",
     "exports"
   ];
@@ -80,7 +82,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   for (const folder of folders) fs.mkdirSync(path.join(projectDir, folder), { recursive: true });
 
   const config = {
-    lumaStudioVersion: "0.4.0",
+    lumaStudioVersion: "0.5.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -115,6 +117,9 @@ START_SCENE "scene_001"
 
   fs.writeFileSync(path.join(projectDir, "assets", "sprites", "frames.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "assets", "sprites", "animations.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "objects", "objects.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "events", "events.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "variables", "variables.json"), JSON.stringify({ global: [], scene: [], object: [] }, null, 2), "utf8");
 
   currentProjectPath = projectDir;
   return { ok: true, path: projectDir };
@@ -205,6 +210,95 @@ ipcMain.handle("asset:save-frame-png", async (_event, { name, dataUrl }) => {
 
   return { ok: true, path: outPath };
 });
+
+
+/* ---------------------- OBJECT / EVENT DATABASE ---------------------- */
+
+function ensureProjectFile(relPath, fallback) {
+  if (!currentProjectPath) return null;
+  const full = path.join(currentProjectPath, ...relPath.split("/"));
+  const dir = path.dirname(full);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(full)) fs.writeFileSync(full, JSON.stringify(fallback, null, 2), "utf8");
+  return full;
+}
+
+ipcMain.handle("database:load", async () => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+
+  const objectsPath = ensureProjectFile("objects/objects.json", []);
+  const eventsPath = ensureProjectFile("events/events.json", []);
+  const variablesPath = ensureProjectFile("variables/variables.json", { global: [], scene: [], object: [] });
+
+  return {
+    ok: true,
+    objects: JSON.parse(fs.readFileSync(objectsPath, "utf8")),
+    events: JSON.parse(fs.readFileSync(eventsPath, "utf8")),
+    variables: JSON.parse(fs.readFileSync(variablesPath, "utf8"))
+  };
+});
+
+ipcMain.handle("database:save", async (_event, payload) => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+
+  const objectsPath = ensureProjectFile("objects/objects.json", []);
+  const eventsPath = ensureProjectFile("events/events.json", []);
+  const variablesPath = ensureProjectFile("variables/variables.json", { global: [], scene: [], object: [] });
+
+  fs.writeFileSync(objectsPath, JSON.stringify(payload.objects || [], null, 2), "utf8");
+  fs.writeFileSync(eventsPath, JSON.stringify(payload.events || [], null, 2), "utf8");
+  fs.writeFileSync(variablesPath, JSON.stringify(payload.variables || { global: [], scene: [], object: [] }, null, 2), "utf8");
+
+  return { ok: true, objectsPath, eventsPath, variablesPath };
+});
+
+ipcMain.handle("database:export-luma", async (_event, payload) => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+
+  const outPath = path.join(currentProjectPath, "build", "logic_preview.luma");
+  if (!fs.existsSync(path.dirname(outPath))) fs.mkdirSync(path.dirname(outPath), { recursive: true });
+
+  const objects = payload.objects || [];
+  const events = payload.events || [];
+  const variables = payload.variables || { global: [], scene: [], object: [] };
+
+  let text = "# LUMA LOGIC PREVIEW - V0.5\\n";
+  text += "# Ce fichier est un aperçu lisible. La compilation binaire viendra plus tard.\\n\\n";
+
+  text += "[VARIABLES]\\n";
+  for (const scope of ["global", "scene", "object"]) {
+    for (const v of (variables[scope] || [])) {
+      text += `VAR ${scope} ${v.name} ${v.type} ${JSON.stringify(v.defaultValue)}\\n`;
+    }
+  }
+
+  text += "\\n[OBJECTS]\\n";
+  for (const o of objects) {
+    text += `OBJECT ${o.id} "${o.name}" TYPE ${o.type}\\n`;
+    text += `  SPRITE ${o.spriteIdle || "none"}\\n`;
+    text += `  HITBOX ${o.hitbox.x} ${o.hitbox.y} ${o.hitbox.w} ${o.hitbox.h}\\n`;
+    text += `  STATS speed=${o.speed} hp=${o.health} damage=${o.damage}\\n`;
+    text += `  TAGS ${(o.tags || []).join(",")}\\n`;
+    text += `  BEHAVIORS ${(o.behaviors || []).map(b => b.name).join(",")}\\n`;
+  }
+
+  text += "\\n[EVENTS]\\n";
+  for (const e of events) {
+    text += `EVENT ${e.id} "${e.name}" ENABLED ${e.enabled ? 1 : 0}\\n`;
+    for (const c of (e.conditions || [])) text += `  IF ${c.type} ${JSON.stringify(c.params || {})}\\n`;
+    for (const a of (e.actions || [])) text += `  THEN ${a.type} ${JSON.stringify(a.params || {})}\\n`;
+  }
+
+  fs.writeFileSync(outPath, text, "utf8");
+  return { ok: true, path: outPath };
+});
+
 
 /* ---------------------- PIPELINE LPK ---------------------- */
 

@@ -129,3 +129,15 @@ ASSET LAB ────► importer / découper / sélectionner frames
 
 ### v1.0
 - Build d'un binaire `.LUMA` exécutable sur la console Luma cible
+
+
+## V0.5 — Object / Event Database
+
+- Base de données d'objets (`objects/objects.json`)
+- Base de données d'events IF / THEN (`events/events.json`)
+- Variables globales, scène et objet (`variables/variables.json`)
+- Behaviors préfabriqués : TopDownMovement, EnemyPatrol, DoorTransition, DialogNPC, etc.
+- Analyseur de projet : objets sans sprite, events vides, portes sans destination, variables doublons
+- Export lisible `build/logic_preview.luma`
+
+Cette version pose le cerveau logique du moteur Luma avant le Map Editor.

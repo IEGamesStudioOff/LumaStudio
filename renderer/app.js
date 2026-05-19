@@ -9,6 +9,7 @@ import {
 } from "./modules/asset-lab.js";
 import { initSpriteEditor, openSpriteEditor }            from "./modules/sprite-editor.js";
 import { initAnimationEditor, openAnimationEditor }      from "./modules/animation-editor.js";
+import { initObjectEventDb, openObjectEventDb }          from "./modules/object-event-db.js";
 
 let selectedSize = "550ko";
 
@@ -80,6 +81,8 @@ initAnimationEditor({
   getSourceImage: () => getSourceImage()
 });
 
+initObjectEventDb();
+
 /* ---------------------- NAVIGATION SIDEBAR ---------------------- */
 
 document.getElementById("navSprite").addEventListener("click", (e) => {
@@ -99,4 +102,14 @@ document.getElementById("openAnimationEditor").addEventListener("click", (e) => 
 
 document.getElementById("navAssetFromSprite").addEventListener("click", () => {
   showScreen("assetLab");
+});
+
+
+/* ---------------------- OBJECT / EVENT DATABASE V0.5 ---------------------- */
+
+const openDbButton = document.getElementById("openObjectEventDb");
+if (openDbButton) openDbButton.addEventListener("click", openObjectEventDb);
+
+document.querySelectorAll("[data-open-db]").forEach((btn) => {
+  btn.addEventListener("click", openObjectEventDb);
 });

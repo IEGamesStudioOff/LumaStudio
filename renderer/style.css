@@ -822,3 +822,233 @@ h2 {
   border: 2px solid #000;
   letter-spacing: 0.5px;
 }
+
+
+/* ---------------------- V0.5 OBJECT / EVENT DATABASE ---------------------- */
+
+.db-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.db-tab {
+  padding: 12px 16px;
+  border: 3px solid var(--blue);
+  background: #000;
+  color: var(--white);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.db-tab.active {
+  background: linear-gradient(180deg, #334eff, #1b2bb4);
+  color: var(--white);
+}
+
+.db-page {
+  display: none;
+}
+
+.db-page.active {
+  display: block;
+}
+
+.db-grid {
+  display: grid;
+  grid-template-columns: 310px 1fr;
+  gap: 18px;
+}
+
+.db-variable-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) 1fr 1fr 1fr;
+  gap: 18px;
+}
+
+.db-list-panel,
+.db-edit-panel {
+  border: 3px solid var(--blue);
+  background: #04091f;
+  padding: 16px;
+  min-height: 460px;
+}
+
+.db-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.db-panel-title h2 {
+  margin: 0;
+}
+
+.db-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 590px;
+  overflow: auto;
+}
+
+.db-list.compact {
+  max-height: 420px;
+}
+
+.db-item {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #2141d6;
+  background: #000;
+  color: var(--white);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db-item.active {
+  border-color: var(--cyan);
+  background: #162c9d;
+}
+
+.db-item strong {
+  display: block;
+  color: var(--white);
+  font-size: 15px;
+  margin-bottom: 5px;
+}
+
+.db-item span {
+  display: block;
+  color: var(--green);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.two-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.four-cols {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 10px 0 18px;
+}
+
+.checkbox-row.behavior {
+  border: 2px solid #2141d6;
+  background: #000;
+  padding: 10px;
+  color: var(--white);
+}
+
+.editor-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.small {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.tiny {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.danger {
+  border: 3px solid #9d1f2d;
+  background: #5a0b15;
+  color: var(--white);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.event-builder {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 180px;
+  padding: 10px;
+  border: 2px solid #2141d6;
+  background: #000;
+}
+
+.rule-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.rule-row input,
+.rule-row select {
+  font-size: 13px;
+  padding: 8px;
+}
+
+.var-chip {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name btn"
+    "meta btn";
+  gap: 4px 8px;
+  align-items: center;
+  padding: 10px;
+  border: 2px solid #2141d6;
+  background: #000;
+}
+
+.var-chip strong {
+  grid-area: name;
+  color: var(--white);
+}
+
+.var-chip span {
+  grid-area: meta;
+  color: var(--green);
+  font-size: 12px;
+}
+
+.var-chip button {
+  grid-area: btn;
+}
+
+.analyzer-output {
+  white-space: pre-wrap;
+  min-height: 360px;
+  padding: 16px;
+  border: 2px solid #2141d6;
+  background: #000;
+  color: var(--green);
+  line-height: 1.5;
+}
+
+@media (max-width: 1200px) {
+  .db-grid,
+  .db-variable-grid,
+  .event-builder {
+    grid-template-columns: 1fr;
+  }
+}
