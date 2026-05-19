@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld("lumaAPI", {
   saveFrames: (frames) => ipcRenderer.invoke("asset:save-frames", frames),
   saveLogic: (data) => ipcRenderer.invoke("logic:save-v05", data),
   saveMusic: (music) => ipcRenderer.invoke("music:save", music),
-  saveNarrative: (data) => ipcRenderer.invoke("narrative:save", data)
+  saveNarrative: (data) => ipcRenderer.invoke("narrative:save", data),
+  saveSceneData: (data) => ipcRenderer.invoke("scene:save-v08", data)
 });

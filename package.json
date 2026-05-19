@@ -1,6 +1,6 @@
 {
   "name": "luma-studio",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Luma Studio - \u00e9diteur r\u00e9tro pour cr\u00e9er des jeux Luma",
   "main": "main.js",
   "scripts": {

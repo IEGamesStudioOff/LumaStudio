@@ -8,6 +8,13 @@ let music = { name: "theme_01", tempo: 120, tracks: { A: [], B: [] } };
 let dialogues = [];
 let cutscenes = [];
 let triggers = [];
+let maps = [];
+let scenes = [];
+let currentMap = null;
+let currentScene = null;
+let showCameraFrame = true;
+let camera = { x: 0, y: 0, w: 160, h: 128 };
+let testPlayer = { x: 32, y: 32, size: 12, active: false };
 let currentCutSteps = [];
 let audioCtx = null;
 let playing = false;
@@ -45,6 +52,10 @@ function enterStudio(path, data = null) {
     dialogues = data.dialogues || [];
     cutscenes = data.cutscenes || [];
     triggers = data.triggers || [];
+    maps = data.maps || [];
+    scenes = data.scenes || [];
+    if (maps.length) currentMap = maps[0];
+    if (scenes.length) currentScene = scenes[0];
     renderAll();
   }
 }
@@ -355,4 +366,345 @@ function renderDialogues() { renderList("dialoguesList", dialogues, d => `<stron
 function renderCutSteps() { renderList("cutSteps", currentCutSteps, s => `<strong>${s.time}s</strong> ${s.action}<br>${s.target} ${s.value}`); }
 function renderCutscenes() { renderList("cutscenesList", cutscenes, c => `<strong>${c.id}</strong><br>${c.steps.length} step(s)`); }
 function renderTriggers() { renderList("triggersList", triggers, t => `<strong>${t.id}</strong><br>IF ${t.condition}<br>THEN ${t.action} → ${t.target}`); }
-function renderAll() { renderObjects(); renderEvents(); renderMusic(); renderDialogues(); renderCutscenes(); renderTriggers(); }
+function renderAll() { renderObjects(); renderEvents(); renderMusic(); renderDialogues(); renderCutscenes(); renderTriggers(); renderSceneEditor(); }
+
+
+
+// V0.8 MAP / SCENE EDITOR
+const mapCanvas = $("mapCanvas");
+const mapCtx = mapCanvas.getContext("2d");
+const lumaPreviewCanvas = $("lumaPreviewCanvas");
+const lumaCtx = lumaPreviewCanvas.getContext("2d");
+
+lumaPreviewCanvas.width = 160;
+lumaPreviewCanvas.height = 128;
+
+function createEmptyLayer(w, h, value = 0) {
+  return new Array(w * h).fill(value);
+}
+
+function initSceneFromInputs() {
+  const w = Math.max(10, Number($("mapW").value) || 20);
+  const h = Math.max(8, Number($("mapH").value) || 15);
+  const tileSize = Math.max(8, Number($("mapTileSize").value) || 16);
+  const mapId = $("mapId").value || "map_001";
+
+  currentMap = {
+    id: mapId,
+    width: w,
+    height: h,
+    tileSize,
+    layers: {
+      floor: createEmptyLayer(w, h, 0),
+      decor: createEmptyLayer(w, h, 0),
+      collision: createEmptyLayer(w, h, 0)
+    }
+  };
+
+  currentScene = {
+    id: $("sceneId").value || "scene_001",
+    name: $("sceneName").value || "Scene 001",
+    mapId,
+    music: $("sceneMusic").value || "",
+    cameraMode: $("cameraMode").value,
+    playerSpawn: { x: 32, y: 32 },
+    objects: [],
+    triggers: []
+  };
+
+  maps = [currentMap];
+  scenes = [currentScene];
+
+  camera.x = 0;
+  camera.y = 0;
+  testPlayer.x = currentScene.playerSpawn.x;
+  testPlayer.y = currentScene.playerSpawn.y;
+
+  renderSceneEditor();
+}
+
+$("createScene").addEventListener("click", initSceneFromInputs);
+
+$("saveScene").addEventListener("click", async () => {
+  if (!currentMap || !currentScene) return alert("Crée une scène d'abord.");
+  const result = await window.lumaAPI.saveSceneData({ maps, scenes });
+  alert(result.ok ? "Scène sauvegardée + exportée." : result.error || "Erreur export scène.");
+});
+
+$("toggleCamera").addEventListener("click", () => {
+  showCameraFrame = !showCameraFrame;
+  renderSceneEditor();
+});
+
+$("centerCamera").addEventListener("click", () => {
+  if (!currentScene) return;
+  camera.x = Math.max(0, currentScene.playerSpawn.x - 80);
+  camera.y = Math.max(0, currentScene.playerSpawn.y - 64);
+  renderSceneEditor();
+});
+
+$("playScenePreview").addEventListener("click", () => {
+  testPlayer.active = !testPlayer.active;
+  if (testPlayer.active && currentScene) {
+    testPlayer.x = currentScene.playerSpawn.x;
+    testPlayer.y = currentScene.playerSpawn.y;
+    camera.x = Math.max(0, testPlayer.x - 80);
+    camera.y = Math.max(0, testPlayer.y - 64);
+  }
+  renderSceneEditor();
+});
+
+mapCanvas.addEventListener("mousedown", (event) => {
+  if (!currentMap || !currentScene) return;
+
+  const rect = mapCanvas.getBoundingClientRect();
+  const scaleX = mapCanvas.width / rect.width;
+  const scaleY = mapCanvas.height / rect.height;
+  const px = Math.floor((event.clientX - rect.left) * scaleX);
+  const py = Math.floor((event.clientY - rect.top) * scaleY);
+  const tileSize = currentMap.tileSize;
+  const tx = Math.floor(px / tileSize);
+  const ty = Math.floor(py / tileSize);
+  const index = ty * currentMap.width + tx;
+
+  if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return;
+
+  const tool = $("mapTool").value;
+  const layer = $("mapLayer").value;
+  const tileId = Math.max(0, Math.min(255, Number($("tileId").value) || 0));
+
+  if (tool === "paint") {
+    currentMap.layers[layer][index] = tileId;
+  } else if (tool === "erase") {
+    currentMap.layers[layer][index] = 0;
+  } else if (tool === "collision") {
+    currentMap.layers.collision[index] = currentMap.layers.collision[index] ? 0 : 1;
+  } else if (tool === "spawn") {
+    currentScene.playerSpawn = { x: tx * tileSize, y: ty * tileSize };
+    testPlayer.x = currentScene.playerSpawn.x;
+    testPlayer.y = currentScene.playerSpawn.y;
+  } else if (tool === "camera") {
+    camera.x = Math.max(0, px - 80);
+    camera.y = Math.max(0, py - 64);
+  } else if (tool === "object") {
+    const objectId = $("placeObjectId").value || "object";
+    currentScene.objects.push({
+      objectId,
+      instanceName: `${objectId}_${currentScene.objects.length + 1}`,
+      x: tx * tileSize,
+      y: ty * tileSize,
+      layer: "objects",
+      enabled: true,
+      variables: {}
+    });
+  } else if (tool === "trigger") {
+    currentScene.triggers.push({
+      id: `trigger_${currentScene.triggers.length + 1}`,
+      x: tx * tileSize,
+      y: ty * tileSize,
+      w: tileSize * 2,
+      h: tileSize * 2,
+      action: $("placeTriggerAction").value || "start_dialogue",
+      target: $("placeTriggerTarget").value || "intro_radio_01"
+    });
+  }
+
+  renderSceneEditor();
+});
+
+window.addEventListener("keydown", (event) => {
+  if (!testPlayer.active || !currentMap) return;
+
+  const speed = 4;
+  let nx = testPlayer.x;
+  let ny = testPlayer.y;
+
+  if (event.key === "ArrowLeft") nx -= speed;
+  if (event.key === "ArrowRight") nx += speed;
+  if (event.key === "ArrowUp") ny -= speed;
+  if (event.key === "ArrowDown") ny += speed;
+
+  if (!isSolidAt(nx, ny) && !isSolidAt(nx + testPlayer.size, ny + testPlayer.size)) {
+    testPlayer.x = nx;
+    testPlayer.y = ny;
+  }
+
+  if (currentScene?.cameraMode === "follow_player") {
+    camera.x = Math.max(0, testPlayer.x - 80);
+    camera.y = Math.max(0, testPlayer.y - 64);
+  }
+
+  renderSceneEditor();
+});
+
+function isSolidAt(px, py) {
+  const t = currentMap.tileSize;
+  const tx = Math.floor(px / t);
+  const ty = Math.floor(py / t);
+  if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return true;
+  return currentMap.layers.collision[ty * currentMap.width + tx] > 0;
+}
+
+function renderSceneEditor() {
+  if (!currentMap || !currentScene) {
+    $("mapInfo").textContent = "Crée une map pour commencer.";
+    return;
+  }
+
+  const tileSize = currentMap.tileSize;
+  mapCanvas.width = currentMap.width * tileSize;
+  mapCanvas.height = currentMap.height * tileSize;
+  mapCtx.imageSmoothingEnabled = false;
+
+  mapCtx.fillStyle = "#000000";
+  mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+  drawTileLayer("floor");
+  drawTileLayer("decor");
+  drawCollisionLayer();
+  drawPlacedObjects();
+  drawTriggers();
+  drawSpawn();
+
+  if (testPlayer.active) {
+    mapCtx.fillStyle = "#fff25a";
+    mapCtx.fillRect(testPlayer.x, testPlayer.y, testPlayer.size, testPlayer.size);
+  }
+
+  if (showCameraFrame) {
+    mapCtx.strokeStyle = "#ffffff";
+    mapCtx.lineWidth = 2;
+    mapCtx.strokeRect(camera.x, camera.y, camera.w, camera.h);
+  }
+
+  drawGrid();
+
+  $("mapInfo").textContent = `${currentScene.id} / ${currentMap.width}x${currentMap.height} tiles / écran Luma 160x128`;
+  renderSceneLists();
+  renderSceneMemory();
+  renderLumaPreview();
+}
+
+function drawTileLayer(layerName) {
+  const layer = currentMap.layers[layerName];
+  const tileSize = currentMap.tileSize;
+
+  for (let y = 0; y < currentMap.height; y++) {
+    for (let x = 0; x < currentMap.width; x++) {
+      const id = layer[y * currentMap.width + x];
+      if (!id) continue;
+
+      mapCtx.fillStyle = tileColor(id, layerName);
+      mapCtx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      mapCtx.fillStyle = "#ffffff";
+      mapCtx.font = "8px monospace";
+      mapCtx.fillText(String(id), x * tileSize + 3, y * tileSize + 10);
+    }
+  }
+}
+
+function drawCollisionLayer() {
+  const layer = currentMap.layers.collision;
+  const tileSize = currentMap.tileSize;
+  mapCtx.fillStyle = "rgba(255, 94, 87, 0.45)";
+  for (let y = 0; y < currentMap.height; y++) {
+    for (let x = 0; x < currentMap.width; x++) {
+      if (layer[y * currentMap.width + x]) {
+        mapCtx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      }
+    }
+  }
+}
+
+function drawGrid() {
+  const tileSize = currentMap.tileSize;
+  mapCtx.strokeStyle = "rgba(95,124,255,0.35)";
+  mapCtx.lineWidth = 1;
+  for (let x = 0; x <= currentMap.width; x++) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(x * tileSize + 0.5, 0);
+    mapCtx.lineTo(x * tileSize + 0.5, mapCanvas.height);
+    mapCtx.stroke();
+  }
+  for (let y = 0; y <= currentMap.height; y++) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, y * tileSize + 0.5);
+    mapCtx.lineTo(mapCanvas.width, y * tileSize + 0.5);
+    mapCtx.stroke();
+  }
+}
+
+function drawSpawn() {
+  mapCtx.fillStyle = "#4dff77";
+  mapCtx.fillRect(currentScene.playerSpawn.x, currentScene.playerSpawn.y, 12, 12);
+  mapCtx.fillStyle = "#000";
+  mapCtx.font = "8px monospace";
+  mapCtx.fillText("P", currentScene.playerSpawn.x + 3, currentScene.playerSpawn.y + 9);
+}
+
+function drawPlacedObjects() {
+  for (const obj of currentScene.objects) {
+    mapCtx.fillStyle = "#fff25a";
+    mapCtx.fillRect(obj.x, obj.y, 14, 14);
+    mapCtx.fillStyle = "#000";
+    mapCtx.font = "8px monospace";
+    mapCtx.fillText("O", obj.x + 4, obj.y + 10);
+  }
+}
+
+function drawTriggers() {
+  for (const trig of currentScene.triggers) {
+    mapCtx.strokeStyle = "#ff00ff";
+    mapCtx.lineWidth = 2;
+    mapCtx.strokeRect(trig.x, trig.y, trig.w, trig.h);
+    mapCtx.fillStyle = "#ff00ff";
+    mapCtx.font = "8px monospace";
+    mapCtx.fillText("T", trig.x + 2, trig.y + 9);
+  }
+}
+
+function renderLumaPreview() {
+  lumaCtx.imageSmoothingEnabled = false;
+  lumaCtx.clearRect(0, 0, 160, 128);
+  lumaCtx.drawImage(mapCanvas, camera.x, camera.y, 160, 128, 0, 0, 160, 128);
+}
+
+function tileColor(id, layer) {
+  const colors = ["#000000", "#3155ff", "#5f7cff", "#4dff77", "#fff25a", "#ff5e57", "#00ffff", "#ff00ff"];
+  if (layer === "decor") return colors[(id + 2) % colors.length];
+  return colors[id % colors.length];
+}
+
+function renderSceneLists() {
+  $("spawnInfo").innerHTML = `<div class="data-item"><strong>player_spawn</strong><br>x:${currentScene.playerSpawn.x} y:${currentScene.playerSpawn.y}</div>`;
+
+  $("placedObjectsList").innerHTML = "";
+  currentScene.objects.forEach(o => {
+    const div = document.createElement("div");
+    div.className = "data-item";
+    div.innerHTML = `<strong>${o.instanceName}</strong><br>source: ${o.objectId}<br>x:${o.x} y:${o.y}`;
+    $("placedObjectsList").appendChild(div);
+  });
+
+  $("placedTriggersList").innerHTML = "";
+  currentScene.triggers.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "data-item";
+    div.innerHTML = `<strong>${t.id}</strong><br>${t.action} → ${t.target}<br>x:${t.x} y:${t.y} w:${t.w} h:${t.h}`;
+    $("placedTriggersList").appendChild(div);
+  });
+}
+
+function renderSceneMemory() {
+  const tileBytes = currentMap.width * currentMap.height * 2; // floor + decor, 1 byte each
+  const collisionBytes = currentMap.width * currentMap.height;
+  const objectBytes = currentScene.objects.length * 16;
+  const triggerBytes = currentScene.triggers.length * 20;
+  const total = tileBytes + collisionBytes + objectBytes + triggerBytes;
+
+  $("sceneTilesMem").textContent = formatBytes(tileBytes);
+  $("sceneCollisionMem").textContent = formatBytes(collisionBytes);
+  $("sceneObjectsMem").textContent = formatBytes(objectBytes);
+  $("sceneTriggersMem").textContent = formatBytes(triggerBytes);
+  $("sceneTotalMem").textContent = formatBytes(total);
+}

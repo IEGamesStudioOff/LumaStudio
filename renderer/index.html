@@ -63,6 +63,7 @@
           <button class="nav-btn" data-panel="logicPanel">OBJECTS / EVENTS</button>
           <button class="nav-btn" data-panel="musicPanel">MUSIC 8-BIT</button>
           <button class="nav-btn" data-panel="narrativePanel">DIALOGUES / CUTSCENES</button>
+          <button class="nav-btn" data-panel="scenePanel">MAP / SCENE EDITOR</button>
           <div class="project-path" id="projectPath">Aucun projet</div>
         </aside>
 
@@ -222,6 +223,118 @@
               </section>
             </div>
           </section>
+
+          <section id="scenePanel" class="panel">
+            <div class="help-box">
+              <strong>V0.8 :</strong> Map/Scene Editor. Crée des salles jouables avec tiles, collisions, objets, triggers, caméra 160x128 et export scène.
+            </div>
+
+            <div class="scene-layout">
+              <section class="tool-panel">
+                <h2>Scene Setup</h2>
+                <label>Scene ID</label>
+                <input id="sceneId" value="bunker_entry" />
+
+                <label>Nom affiché</label>
+                <input id="sceneName" value="Entrée du bunker" />
+
+                <label>Map ID</label>
+                <input id="mapId" value="map_bunker_01" />
+
+                <div class="inline-controls">
+                  <div><label>Largeur tiles</label><input id="mapW" type="number" value="20" min="10" /></div>
+                  <div><label>Hauteur tiles</label><input id="mapH" type="number" value="15" min="8" /></div>
+                  <div><label>Tile</label><input id="mapTileSize" type="number" value="16" min="8" /></div>
+                </div>
+
+                <label>Musique liée</label>
+                <input id="sceneMusic" value="theme_01" />
+
+                <label>Caméra</label>
+                <select id="cameraMode">
+                  <option value="follow_player">Follow player</option>
+                  <option value="fixed">Fixed screen</option>
+                  <option value="manual">Manual preview</option>
+                </select>
+
+                <button id="createScene" class="primary full">CRÉER / RESET MAP</button>
+                <button id="saveScene" class="secondary full">SAUVER SCENE + EXPORT</button>
+
+                <h2>Outils</h2>
+                <select id="mapTool">
+                  <option value="paint">Peindre tile</option>
+                  <option value="erase">Effacer</option>
+                  <option value="collision">Collision</option>
+                  <option value="object">Placer objet</option>
+                  <option value="trigger">Placer trigger</option>
+                  <option value="spawn">Placer spawn</option>
+                  <option value="camera">Déplacer caméra</option>
+                </select>
+
+                <label>Layer</label>
+                <select id="mapLayer">
+                  <option value="floor">Sol</option>
+                  <option value="decor">Décor</option>
+                  <option value="collision">Collision</option>
+                </select>
+
+                <label>Tile ID</label>
+                <input id="tileId" type="number" value="1" min="0" max="255" />
+
+                <label>Objet source</label>
+                <input id="placeObjectId" value="guard" />
+
+                <label>Trigger action / target</label>
+                <input id="placeTriggerAction" value="start_dialogue" />
+                <input id="placeTriggerTarget" value="intro_radio_01" />
+
+                <div class="memory-card">
+                  <p><span>Tiles</span><strong id="sceneTilesMem">0 o</strong></p>
+                  <p><span>Collisions</span><strong id="sceneCollisionMem">0 o</strong></p>
+                  <p><span>Objets</span><strong id="sceneObjectsMem">0 o</strong></p>
+                  <p><span>Triggers</span><strong id="sceneTriggersMem">0 o</strong></p>
+                  <p><span>Total scène</span><strong id="sceneTotalMem">0 o</strong></p>
+                </div>
+              </section>
+
+              <section class="map-workspace">
+                <div class="map-toolbar">
+                  <button id="toggleCamera" class="secondary">Caméra 160x128</button>
+                  <button id="centerCamera" class="secondary">Centrer sur spawn</button>
+                  <button id="playScenePreview" class="secondary">PLAY SCENE</button>
+                  <span id="mapInfo">Aucune map</span>
+                </div>
+
+                <div class="map-scroll">
+                  <canvas id="mapCanvas"></canvas>
+                </div>
+
+                <div class="scene-preview-box">
+                  <h2>Preview écran Luma 160x128</h2>
+                  <canvas id="lumaPreviewCanvas"></canvas>
+                  <p>Ce cadre montre ce que la console verra réellement.</p>
+                </div>
+              </section>
+
+              <section class="tool-panel">
+                <h2>Composition scène</h2>
+                <h3>Spawn</h3>
+                <div id="spawnInfo" class="data-list small-list"></div>
+
+                <h3>Objets placés</h3>
+                <div id="placedObjectsList" class="data-list small-list"></div>
+
+                <h3>Triggers placés</h3>
+                <div id="placedTriggersList" class="data-list small-list"></div>
+
+                <h3>Export</h3>
+                <p class="small-text">
+                  V0.8 exporte maps.json, scenes.json, scene_preview.luma et un premier .lmapbin simple.
+                </p>
+              </section>
+            </div>
+          </section>
+
         </section>
       </div>
     </section>

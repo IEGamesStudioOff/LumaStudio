@@ -50,6 +50,7 @@ function ensureProjectFolders(projectDir) {
     "assets/audio",
     "assets/portraits",
     "maps",
+    "maps/bin",
     "dialogues",
     "cutscenes",
     "triggers",
@@ -136,6 +137,8 @@ START_SCENE "scene_001"
   fs.writeFileSync(path.join(projectDir, "dialogues", "dialogues.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "cutscenes", "cutscenes.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "triggers", "triggers.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "maps", "maps.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "scenes", "scenes.json"), JSON.stringify([], null, 2), "utf8");
 
   currentProjectPath = projectDir;
   return { ok: true, path: projectDir, config };
@@ -170,7 +173,9 @@ ipcMain.handle("project:open", async () => {
     music: readJsonSafe(path.join(projectDir, "music", "music.json"), []),
     dialogues: readJsonSafe(path.join(projectDir, "dialogues", "dialogues.json"), []),
     cutscenes: readJsonSafe(path.join(projectDir, "cutscenes", "cutscenes.json"), []),
-    triggers: readJsonSafe(path.join(projectDir, "triggers", "triggers.json"), [])
+    triggers: readJsonSafe(path.join(projectDir, "triggers", "triggers.json"), []),
+    maps: readJsonSafe(path.join(projectDir, "maps", "maps.json"), []),
+    scenes: readJsonSafe(path.join(projectDir, "scenes", "scenes.json"), [])
   };
 
   return { ok: true, path: projectDir, projectData };
@@ -288,4 +293,62 @@ ipcMain.handle("narrative:save", async (_event, data) => {
   fs.writeFileSync(path.join(currentProjectPath, "exports", "narrative_preview.luma"), preview, "utf8");
 
   return { ok: true, path: path.join(currentProjectPath, "exports", "narrative_preview.luma") };
+});
+
+
+ipcMain.handle("scene:save-v08", async (_event, data) => {
+  if (!currentProjectPath) return { ok: false, error: "Aucun projet actif." };
+
+  const maps = data.maps || [];
+  const scenes = data.scenes || [];
+
+  fs.writeFileSync(path.join(currentProjectPath, "maps", "maps.json"), JSON.stringify(maps, null, 2), "utf8");
+  fs.writeFileSync(path.join(currentProjectPath, "scenes", "scenes.json"), JSON.stringify(scenes, null, 2), "utf8");
+
+  let preview = `# LUMA SCENE PREVIEW\n\n`;
+
+  for (const map of maps) {
+    preview += `MAP ${map.id} ${map.width} ${map.height} TILESIZE ${map.tileSize}\n`;
+    preview += `LAYER_FLOOR ${map.layers.floor.join(",")}\n`;
+    preview += `LAYER_DECOR ${map.layers.decor.join(",")}\n`;
+    preview += `LAYER_COLLISION ${map.layers.collision.join(",")}\n`;
+    preview += `END_MAP\n\n`;
+  }
+
+  for (const scene of scenes) {
+    preview += `SCENE ${scene.id}\n`;
+    preview += `NAME "${scene.name}"\n`;
+    preview += `MAP ${scene.mapId}\n`;
+    preview += `MUSIC ${scene.music || "none"}\n`;
+    preview += `SPAWN ${scene.playerSpawn.x} ${scene.playerSpawn.y}\n`;
+    preview += `CAMERA ${scene.cameraMode}\n`;
+
+    for (const object of scene.objects || []) {
+      preview += `OBJECT ${object.objectId} INSTANCE ${object.instanceName} X ${object.x} Y ${object.y} LAYER ${object.layer}\n`;
+    }
+
+    for (const trigger of scene.triggers || []) {
+      preview += `TRIGGER ${trigger.id} X ${trigger.x} Y ${trigger.y} W ${trigger.w} H ${trigger.h} ACTION ${trigger.action} TARGET ${trigger.target}\n`;
+    }
+
+    preview += `END_SCENE\n\n`;
+  }
+
+  fs.writeFileSync(path.join(currentProjectPath, "exports", "scene_preview.luma"), preview, "utf8");
+
+  // First simple binary map export: width u16, height u16, then tile indices as bytes
+  for (const map of maps) {
+    const bytes = [];
+    bytes.push(map.width & 255, (map.width >> 8) & 255);
+    bytes.push(map.height & 255, (map.height >> 8) & 255);
+    bytes.push(...map.layers.floor.map(v => Number(v) & 255));
+    bytes.push(...map.layers.decor.map(v => Number(v) & 255));
+    bytes.push(...map.layers.collision.map(v => Number(v) & 255));
+    fs.writeFileSync(path.join(currentProjectPath, "maps", "bin", `${map.id}.lmapbin`), Buffer.from(bytes));
+  }
+
+  return {
+    ok: true,
+    path: path.join(currentProjectPath, "exports", "scene_preview.luma")
+  };
 });
