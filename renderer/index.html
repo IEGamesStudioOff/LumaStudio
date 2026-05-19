@@ -4,696 +4,228 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v0.6</title>
+  <title>Luma Studio v0.7</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<main>
-
-  <!-- SPLASH -->
-  <section id="splash" class="screen active">
-    <div class="scanlines"></div>
-    <div class="stars"></div>
-    <div class="retro-panel splash-box">
-      <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
-      <p class="subtitle">LUMA.LAOSENGINE2.0</p>
-      <p class="loading">CHARGEMENT<span id="dots">...</span></p>
-    </div>
-  </section>
-
-  <!-- PROJET -->
-  <section id="project" class="screen">
-    <div class="scanlines"></div>
-    <div class="stars"></div>
-    <div class="retro-panel project-box">
-      <div class="titlebar"><span>NOUVEAU PROJET</span></div>
-      <div class="project-content">
-        <div class="form-side">
-          <label for="projectName">Nom du projet</label>
-          <input id="projectName" value="MonProjet" maxlength="32" />
-          <label for="editorName">Nom de l'éditeur</label>
-          <input id="editorName" value="I.E.Games_Studio" maxlength="32" />
-        </div>
-        <div class="separator"></div>
-        <div class="size-side">
-          <label>Taille du jeu</label>
-          <button class="size-option" data-size="180ko"><span class="disk">▣</span><strong>180 Ko</strong><em>Petit prototype</em></button>
-          <button class="size-option selected" data-size="550ko"><span class="cursor">▶</span><span class="disk">▣</span><strong>550 Ko</strong><em>Standard rétro</em></button>
-          <button class="size-option" data-size="2mo"><span class="disk">▣</span><strong>2 Mo</strong><em>Grand jeu</em></button>
-        </div>
+  <main>
+    <section id="splash" class="screen active center">
+      <div class="scanlines"></div>
+      <div class="stars"></div>
+      <div class="retro-panel splash-box">
+        <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
+        <p class="subtitle">LUMA STUDIO v0.7</p>
+        <p class="loading">NARRATIVE ENGINE<span id="dots">...</span></p>
       </div>
-      <footer>
-        <p id="status">Prêt à créer un projet Luma.</p>
-        <button id="createProject">CRÉER LE PROJET</button>
-      </footer>
-    </div>
-  </section>
+    </section>
 
-  <!-- ASSET LAB -->
-  <section id="assetLab" class="screen lab-screen">
-    <div class="scanlines"></div>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
-        <button class="nav-btn active" id="navAsset">ASSET LAB</button>
-        <button class="nav-btn disabled" id="navSprite">SPRITE EDITOR</button>
-        <button class="nav-btn disabled" id="navAnim">ANIMATIONS</button>
-        <button class="nav-btn disabled">MAP EDITOR</button>
-        <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
-        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
-        <div class="project-path" id="projectPath">Aucun projet</div>
-      </aside>
+    <section id="project" class="screen center">
+      <div class="scanlines"></div>
+      <div class="stars"></div>
+      <div class="retro-panel project-box">
+        <div class="titlebar"><span>LUMA STUDIO</span></div>
 
-      <section class="workspace">
-        <header class="workspace-header">
-          <div>
-            <h1>ASSET LAB</h1>
-            <p>Importer, découper, sélectionner et estimer la mémoire des sprites.</p>
+        <div class="project-content">
+          <div class="form-side">
+            <h2>Nouveau projet</h2>
+            <label for="projectName">Nom du projet</label>
+            <input id="projectName" value="MonProjet" maxlength="32" />
+            <label for="editorName">Nom de l’éditeur</label>
+            <input id="editorName" value="I.E.Games_Studio" maxlength="32" />
+            <button id="createProject" class="primary full">CRÉER LE PROJET</button>
           </div>
-          <div class="header-buttons">
-            <button id="openSpriteEditor"    class="secondary disabled" disabled>OUVRIR ÉDITEUR</button>
-            <button id="openAnimationEditor" class="secondary disabled" disabled>ANIMATIONS</button>
-            <button id="openObjectEventDb" class="secondary">OBJECTS / EVENTS</button>
-            <button class="secondary" data-open-music>MUSIC</button>
-            <button id="exportLpk"           class="secondary">EXPORT .LPK</button>
-            <button id="importImage"         class="primary">IMPORTER IMAGE / GIF</button>
-          </div>
-        </header>
 
-        <div class="help-box">
-          <strong>Principe :</strong>
-          une spritesheet est une grande image découpée en cases. Chaque case devient une frame.
-          Clique une frame pour la sélectionner, double-clique (ou bouton OUVRIR ÉDITEUR) pour la pixel-editer.
+          <div class="separator"></div>
+
+          <div class="size-side">
+            <h2>Taille cible</h2>
+            <button class="size-option" data-size="180ko"><span class="disk">▣</span><strong>180 Ko</strong><em>Petit prototype</em></button>
+            <button class="size-option selected" data-size="550ko"><span class="cursor">▶</span><span class="disk">▣</span><strong>550 Ko</strong><em>Standard rétro</em></button>
+            <button class="size-option" data-size="2mo"><span class="disk">▣</span><strong>2 Mo</strong><em>Grand jeu</em></button>
+
+            <h2>Projet existant</h2>
+            <button id="openProject" class="secondary full">OUVRIR UN PROJET</button>
+          </div>
         </div>
 
-        <div class="lab-grid">
-          <section class="tool-panel">
-            <h2>Découpe</h2>
-
-            <label>Taille de frame</label>
-            <div class="inline-controls">
-              <select id="presetSize">
-                <option value="8">8 x 8</option>
-                <option value="16" selected>16 x 16</option>
-                <option value="32">32 x 32</option>
-                <option value="custom">Custom</option>
-              </select>
-              <input id="frameW" type="number" value="16" min="1" />
-              <input id="frameH" type="number" value="16" min="1" />
-            </div>
-
-            <label>Nom de base</label>
-            <input id="baseName" value="sprite" />
-
-            <label>Dossier / catégorie</label>
-            <select id="folderName">
-              <option value="player">player</option>
-              <option value="enemy">enemy</option>
-              <option value="tiles">tiles</option>
-              <option value="items">items</option>
-              <option value="portraits">portraits</option>
-              <option value="fx">fx</option>
-            </select>
-
-            <label>Type d'usage</label>
-            <select id="usageType">
-              <option value="frame">Simple frame</option>
-              <option value="animation">Animation</option>
-              <option value="object_player">Objet jouable</option>
-              <option value="object_enemy">Ennemi</option>
-              <option value="tile">Tile décor</option>
-              <option value="portrait">Portrait dialogue</option>
-              <option value="item">Item</option>
-            </select>
-
-            <button id="sliceImage" class="primary full">DÉCOUPER</button>
-            <button id="saveFrames" class="secondary full">SAUVER FRAMES.JSON</button>
-
-            <h2>Mémoire</h2>
-            <div class="memory-card">
-              <p><span>Frames :</span><strong id="memFrames">0</strong></p>
-              <p><span>Pixel data :</span><strong id="memRaw">0 Ko</strong></p>
-              <p><span>Limite projet :</span><strong id="memLimit">550ko</strong></p>
-              <div class="bar"><div id="memBar"></div></div>
-              <p id="memWarn">Importe une image pour estimer la mémoire.</p>
-            </div>
-          </section>
-
-          <section class="preview-panel">
-            <h2>Image source</h2>
-            <div class="canvas-wrap">
-              <canvas id="sourceCanvas"></canvas>
-            </div>
-            <p id="imageInfo">Aucune image importée.</p>
-
-            <h2 style="margin-top:18px">Aperçu frame sélectionnée</h2>
-            <div id="previewWrap" class="canvas-wrap small">
-              <canvas id="previewCanvas"></canvas>
-            </div>
-            <p id="previewInfo">Sélectionne une frame pour l'agrandir.</p>
-          </section>
-
-          <section class="frames-panel">
-            <div class="frames-title">
-              <h2>Frames découpées</h2>
-              <span id="frameCount">0 frame</span>
-            </div>
-            <div id="framesGrid" class="frames-grid"></div>
-          </section>
-        </div>
-
-        <section class="editor-preview">
-          <h2>Palette ST7735 (32 couleurs RGB565)</h2>
-          <div class="palette-row" id="paletteRow"></div>
-          <p>Double-clique une frame ou utilise OUVRIR ÉDITEUR pour passer en édition pixel.
-             EXPORT .LPK génère <code>build/sprites.lpk</code> au format binaire RGB565.</p>
-        </section>
-      </section>
-    </div>
-  </section>
-
-  <!-- SPRITE EDITOR -->
-  <section id="spriteEditor" class="screen lab-screen">
-    <div class="scanlines"></div>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
-        <button class="nav-btn" id="navAssetFromSprite">ASSET LAB</button>
-        <button class="nav-btn active">SPRITE EDITOR</button>
-        <button class="nav-btn disabled">ANIMATIONS</button>
-        <button class="nav-btn disabled">MAP EDITOR</button>
-        <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
-        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
-      </aside>
-
-      <section class="workspace">
-        <header class="workspace-header">
-          <div>
-            <h1>SPRITE EDITOR</h1>
-            <p id="spriteInfo">—</p>
-          </div>
-          <div class="header-buttons">
-            <button id="closeSprite"   class="secondary">← RETOUR</button>
-            <button id="savePngSprite" class="secondary">EXPORT PNG</button>
-            <button id="saveSprite"    class="primary">SAUVEGARDER</button>
-          </div>
-        </header>
-
-        <div class="sprite-grid">
-          <!-- Outils + couleur courante -->
-          <section class="sprite-tools">
-            <h2>Outils</h2>
-            <div class="tools-row">
-              <button class="tool-btn active" data-tool="pencil"     title="Crayon (B/P)">✏</button>
-              <button class="tool-btn"        data-tool="eraser"     title="Gomme (E)">⌫</button>
-              <button class="tool-btn"        data-tool="eyedropper" title="Pipette (I)">⌖</button>
-              <button class="tool-btn"        data-tool="fill"       title="Remplissage (G)">▣</button>
-            </div>
-
-            <h2>Transformes</h2>
-            <div class="tools-row">
-              <button class="tool-btn" data-tool="flipH"  title="Flip horizontal">⇄</button>
-              <button class="tool-btn" data-tool="flipV"  title="Flip vertical">⇅</button>
-              <button class="tool-btn" data-tool="resize" title="Redimensionner">⤢</button>
-              <button class="tool-btn" data-tool="clear"  title="Effacer tout">✕</button>
-            </div>
-
-            <h2>Vue</h2>
-            <div class="tools-row">
-              <button class="tool-btn" id="zoomOut"    title="Zoom -">-</button>
-              <button class="tool-btn" id="zoomIn"     title="Zoom +">+</button>
-              <button class="tool-btn" id="toggleGrid" title="Grille">#</button>
-            </div>
-
-            <h2>Historique</h2>
-            <div class="tools-row">
-              <button class="tool-btn" id="undoBtn" title="Annuler (Ctrl+Z)">↶</button>
-              <button class="tool-btn" id="redoBtn" title="Refaire (Ctrl+Y)">↷</button>
-            </div>
-
-            <h2>Couleur active</h2>
-            <div class="current-color-wrap">
-              <div id="currentColor" class="current-color"></div>
-            </div>
-
-            <h2>Aperçu réel</h2>
-            <div class="mini-preview-wrap">
-              <canvas id="spriteMini"></canvas>
-            </div>
-            <p class="hint">Taille native ST7735.</p>
-          </section>
-
-          <!-- Canvas central -->
-          <section class="sprite-canvas-area">
-            <div class="canvas-stack">
-              <canvas id="spriteCanvas"></canvas>
-              <canvas id="spriteOverlay"></canvas>
-            </div>
-          </section>
-
-          <!-- Palette -->
-          <section class="sprite-palette-panel">
-            <h2>Palette ST7735</h2>
-            <div id="spritePalette" class="palette-grid"></div>
-            <p class="hint">32 couleurs RGB565 pré-quantifiées (DB32). Survol = valeur hex.</p>
-          </section>
-        </div>
-      </section>
-    </div>
-  </section>
-
-  <!-- ANIMATION EDITOR -->
-  <section id="animationEditor" class="screen lab-screen">
-    <div class="scanlines"></div>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
-        <button class="nav-btn" id="navAssetFromAnim">ASSET LAB</button>
-        <button class="nav-btn disabled">SPRITE EDITOR</button>
-        <button class="nav-btn active">ANIMATIONS</button>
-        <button class="nav-btn disabled">MAP EDITOR</button>
-        <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
-        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
-      </aside>
-
-      <section class="workspace">
-        <header class="workspace-header">
-          <div>
-            <h1>ANIMATION EDITOR</h1>
-            <p>Compose des animations à partir des frames. Drag &amp; drop, vitesse, loop, preview.</p>
-          </div>
-          <div class="header-buttons">
-            <button id="animClose" class="secondary">← RETOUR</button>
-            <button id="animNew"   class="secondary">+ NOUVELLE</button>
-            <button id="animSave"  class="primary">SAUVEGARDER</button>
-          </div>
-        </header>
-
-        <div class="anim-grid">
-
-          <!-- COLONNE 1 : Liste d'animations -->
-          <section class="anim-list-panel">
-            <h2>Animations</h2>
-            <div id="animList" class="anim-list"></div>
-            <p class="hint">
-              Mémoire totale : <strong id="animsTotalMem">0 o</strong>
-            </p>
-          </section>
-
-          <!-- COLONNE 2 : Édition + timeline + preview -->
-          <section class="anim-edit-panel">
-            <h2>Détails</h2>
-            <label>Nom</label>
-            <input id="animName" placeholder="player_walk_down" />
-
-            <div class="anim-controls">
-              <div>
-                <label>Vitesse : <span id="animSpeedValue">120 ms</span></label>
-                <input id="animSpeed" type="range" min="20" max="500" step="10" value="120" />
-              </div>
-              <div class="anim-loop-wrap">
-                <label class="checkbox-row">
-                  <input type="checkbox" id="animLoop" checked />
-                  <span>Loop on</span>
-                </label>
-                <button id="animDelete" class="danger">SUPPRIMER</button>
-              </div>
-            </div>
-
-            <h2 style="margin-top:14px">Timeline</h2>
-            <div id="animTimeline" class="anim-timeline"></div>
-            <p class="hint" id="animMemHint">
-              Mémoire animation : <strong id="animMem">0 o</strong>
-              · header 24 o + 2 o / frame référencée
-            </p>
-
-            <h2 style="margin-top:14px">Preview</h2>
-            <div class="anim-preview-wrap">
-              <canvas id="animPreview"></canvas>
-            </div>
-            <div class="anim-playback">
-              <button id="animPlay"  class="tool-btn">▶</button>
-              <button id="animPause" class="tool-btn">⏸</button>
-              <button id="animStop"  class="tool-btn">■</button>
-            </div>
-          </section>
-
-          <!-- COLONNE 3 : Pool de frames -->
-          <section class="anim-pool-panel">
-            <h2>Frames disponibles</h2>
-            <p class="hint" style="margin-bottom:10px">
-              Drag vers la timeline · double-clic = ajouter à la fin
-            </p>
-            <div id="animFramePool" class="anim-frame-pool"></div>
-          </section>
-
-        </div>
-      </section>
-    </div>
-  </section>
-
-
-  <!-- OBJECT / EVENT DATABASE -->
-  <section id="objectEventDb" class="screen lab-screen">
-    <div class="scanlines"></div>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
-        <button class="nav-btn" id="navAssetFromDb">ASSET LAB</button>
-        <button class="nav-btn disabled">SPRITE EDITOR</button>
-        <button class="nav-btn disabled">ANIMATIONS</button>
-        <button class="nav-btn active">OBJECTS / EVENTS</button>
-        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
-        <div class="project-path" id="dbProjectPath">Base logique V0.5</div>
-      </aside>
-
-      <section class="workspace">
-        <header class="workspace-header">
-          <div>
-            <h1>OBJECT / EVENT DATABASE</h1>
-            <p>Décris les objets, variables et règles du jeu avant la map. C'est le cerveau du moteur Luma.</p>
-          </div>
-          <div class="header-buttons">
-            <button id="dbBack" class="secondary">← RETOUR</button>
-            <button id="dbLoad" class="secondary">CHARGER</button>
-            <button id="dbSave" class="primary">SAUVEGARDER</button>
-            <button id="dbExport" class="secondary">EXPORT LOGIC .LUMA</button>
-          </div>
-        </header>
-
-        <div class="help-box">
-          <strong>V0.5 :</strong>
-          un objet est une fiche de gameplay. Un event est une règle IF/THEN. Les variables peuvent être globales, scène ou objet.
-          Cette base sera plus tard compilée dans <code>game.luma</code>.
-        </div>
-
-        <div class="db-tabs">
-          <button class="db-tab active" data-db-tab="objects">OBJETS</button>
-          <button class="db-tab" data-db-tab="events">EVENTS</button>
-          <button class="db-tab" data-db-tab="variables">VARIABLES</button>
-          <button class="db-tab" data-db-tab="analyzer">ANALYSE</button>
-        </div>
-
-        <section id="dbObjects" class="db-page active">
-          <div class="db-grid">
-            <section class="db-list-panel">
-              <div class="db-panel-title">
-                <h2>Objets du jeu</h2>
-                <button id="newObject" class="secondary small">+ OBJET</button>
-              </div>
-              <div id="objectList" class="db-list"></div>
-            </section>
-
-            <section class="db-edit-panel">
-              <h2>Fiche objet</h2>
-              <div class="two-cols">
-                <div>
-                  <label>Nom objet</label>
-                  <input id="objName" placeholder="player" />
-                </div>
-                <div>
-                  <label>Type</label>
-                  <select id="objType">
-                    <option value="PLAYER">PLAYER</option>
-                    <option value="ENEMY">ENEMY</option>
-                    <option value="NPC">NPC</option>
-                    <option value="ITEM">ITEM</option>
-                    <option value="PROJECTILE">PROJECTILE</option>
-                    <option value="DOOR">DOOR</option>
-                    <option value="TRIGGER">TRIGGER</option>
-                    <option value="DECORATION">DECORATION</option>
-                    <option value="BOSS">BOSS</option>
-                    <option value="SAVE_POINT">SAVE_POINT</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="two-cols">
-                <div>
-                  <label>Sprite idle / frame</label>
-                  <input id="objSprite" placeholder="player_idle" />
-                </div>
-                <div>
-                  <label>Animations liées</label>
-                  <input id="objAnimations" placeholder="idle_down, walk_down, attack" />
-                </div>
-              </div>
-
-              <h2>Hitbox</h2>
-              <div class="four-cols">
-                <input id="hitX" type="number" value="0" title="x" />
-                <input id="hitY" type="number" value="0" title="y" />
-                <input id="hitW" type="number" value="16" title="w" />
-                <input id="hitH" type="number" value="16" title="h" />
-              </div>
-
-              <h2>Stats</h2>
-              <div class="four-cols">
-                <input id="objSpeed" type="number" step="0.1" value="1.0" title="speed" />
-                <input id="objHealth" type="number" value="1" title="health" />
-                <input id="objDamage" type="number" value="0" title="damage" />
-                <select id="objSolid"><option value="true">solid</option><option value="false">not solid</option></select>
-              </div>
-
-              <div class="two-cols">
-                <div>
-                  <label>Tags</label>
-                  <input id="objTags" placeholder="player, solid, interactive" />
-                </div>
-                <div>
-                  <label>Variables objet</label>
-                  <input id="objVars" placeholder="ammo:number=8, hp:number=3" />
-                </div>
-              </div>
-
-              <label>Behaviors</label>
-              <div id="behaviorChecks" class="check-grid"></div>
-
-              <div class="editor-actions">
-                <button id="saveObject" class="primary">APPLIQUER OBJET</button>
-                <button id="deleteObject" class="danger">SUPPRIMER OBJET</button>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <section id="dbEvents" class="db-page">
-          <div class="db-grid">
-            <section class="db-list-panel">
-              <div class="db-panel-title">
-                <h2>Events</h2>
-                <button id="newEvent" class="secondary small">+ EVENT</button>
-              </div>
-              <div id="eventList" class="db-list"></div>
-            </section>
-
-            <section class="db-edit-panel">
-              <h2>Event IF / THEN</h2>
-              <div class="two-cols">
-                <div>
-                  <label>Nom event</label>
-                  <input id="eventName" placeholder="open_red_door" />
-                </div>
-                <div>
-                  <label>Activé</label>
-                  <select id="eventEnabled"><option value="true">enabled</option><option value="false">disabled</option></select>
-                </div>
-              </div>
-
-              <div class="event-builder">
-                <section>
-                  <div class="db-panel-title">
-                    <h2>Conditions IF</h2>
-                    <button id="addCondition" class="secondary small">+ CONDITION</button>
-                  </div>
-                  <div id="conditionsList" class="rule-list"></div>
-                </section>
-                <section>
-                  <div class="db-panel-title">
-                    <h2>Actions THEN</h2>
-                    <button id="addAction" class="secondary small">+ ACTION</button>
-                  </div>
-                  <div id="actionsList" class="rule-list"></div>
-                </section>
-              </div>
-
-              <div class="editor-actions">
-                <button id="saveEvent" class="primary">APPLIQUER EVENT</button>
-                <button id="deleteEvent" class="danger">SUPPRIMER EVENT</button>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <section id="dbVariables" class="db-page">
-          <div class="db-variable-grid">
-            <section class="db-edit-panel">
-              <h2>Créer variable</h2>
-              <div class="two-cols">
-                <div>
-                  <label>Scope</label>
-                  <select id="varScope">
-                    <option value="global">global</option>
-                    <option value="scene">scene</option>
-                    <option value="object">object</option>
-                  </select>
-                </div>
-                <div>
-                  <label>Type</label>
-                  <select id="varType">
-                    <option value="bool">bool</option>
-                    <option value="number">number</option>
-                    <option value="string">string</option>
-                  </select>
-                </div>
-              </div>
-              <label>Nom</label>
-              <input id="varName" placeholder="has_red_key" />
-              <label>Valeur par défaut</label>
-              <input id="varDefault" placeholder="false / 0 / texte" />
-              <button id="addVariable" class="primary full">AJOUTER VARIABLE</button>
-            </section>
-
-            <section class="db-edit-panel">
-              <h2>Variables globales</h2>
-              <div id="varsGlobal" class="db-list compact"></div>
-            </section>
-            <section class="db-edit-panel">
-              <h2>Variables scène</h2>
-              <div id="varsScene" class="db-list compact"></div>
-            </section>
-            <section class="db-edit-panel">
-              <h2>Variables objet</h2>
-              <div id="varsObject" class="db-list compact"></div>
-            </section>
-          </div>
-        </section>
-
-        <section id="dbAnalyzer" class="db-page">
-          <div class="db-edit-panel">
-            <div class="db-panel-title">
-              <h2>Analyse du jeu</h2>
-              <button id="runAnalyzer" class="primary small">ANALYSER</button>
-            </div>
-            <div id="analyzerOutput" class="analyzer-output">
-              Clique sur ANALYSER pour vérifier les objets sans sprite, events vides, variables doublons, portes sans destination, etc.
-            </div>
-          </div>
-        </section>
-      </section>
-    </div>
-  </section>
-
-
-<!-- MUSIC EDITOR V0.6 -->
-<section id="musicEditor" class="screen lab-screen">
-  <div class="scanlines"></div>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
-      <button class="nav-btn" id="musicBackAsset">ASSET LAB</button>
-      <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
-      <button class="nav-btn active">MUSIC EDITOR</button>
-      <div class="project-path">Audio V0.6 · 2 piezo buzzers</div>
-    </aside>
-
-    <section class="workspace">
-      <header class="workspace-header">
-        <div>
-          <h1>MUSIC EDITOR 8-BIT</h1>
-          <p>Compose des musiques très légères pour deux piezo buzzers : piste A + piste B.</p>
-        </div>
-        <div class="header-buttons">
-          <button id="musicBack" class="secondary">← RETOUR</button>
-          <button id="musicNew" class="secondary">+ MORCEAU</button>
-          <button id="musicLoad" class="secondary">CHARGER</button>
-          <button id="musicSave" class="primary">SAUVEGARDER</button>
-          <button id="musicExport" class="secondary">EXPORT .LMUS</button>
-        </div>
-      </header>
-
-      <div class="help-box">
-        <strong>V0.6 :</strong>
-        pas de MP3 ni WAV lourd. La musique est une suite de petites commandes : note, octave, durée, silence.
-        Le moteur Luma pourra lire ces données comme une partition ultra légère.
+        <footer>
+          <p id="status">Prêt.</p>
+        </footer>
       </div>
+    </section>
 
-      <div class="music-layout">
-        <section class="music-side db-list-panel">
-          <div class="db-panel-title">
-            <h2>Morceaux</h2>
-            <button id="musicDelete" class="danger small">SUPPRIMER</button>
-          </div>
-          <div id="musicList" class="db-list compact"></div>
+    <section id="studio" class="screen">
+      <div class="scanlines"></div>
+      <div class="app-shell">
+        <aside class="sidebar">
+          <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
+          <button class="nav-btn active" data-panel="assetPanel">ASSET LAB</button>
+          <button class="nav-btn" data-panel="logicPanel">OBJECTS / EVENTS</button>
+          <button class="nav-btn" data-panel="musicPanel">MUSIC 8-BIT</button>
+          <button class="nav-btn" data-panel="narrativePanel">DIALOGUES / CUTSCENES</button>
+          <div class="project-path" id="projectPath">Aucun projet</div>
+        </aside>
 
-          <h2 style="margin-top:18px">Paramètres</h2>
-          <label>Nom du morceau</label>
-          <input id="songName" value="theme_001" />
-
-          <div class="two-cols">
+        <section class="workspace">
+          <header class="workspace-header">
             <div>
-              <label>Tempo BPM</label>
-              <input id="songTempo" type="number" min="40" max="240" value="120" />
+              <h1 id="workspaceTitle">ASSET LAB</h1>
+              <p id="workspaceSubtitle">Pipeline Luma : assets, logique, musique, dialogues et cinématiques.</p>
             </div>
-            <div>
-              <label>Steps</label>
-              <select id="songSteps">
-                <option value="16">16</option>
-                <option value="32" selected>32</option>
-                <option value="64">64</option>
-              </select>
+            <button id="saveAll" class="primary">SAUVEGARDER</button>
+          </header>
+
+          <section id="assetPanel" class="panel active">
+            <div class="help-box"><strong>Asset Lab :</strong> import, découpe et estimation mémoire RGB565.</div>
+            <div class="lab-grid">
+              <section class="tool-panel">
+                <h2>Découpe spritesheet</h2>
+                <button id="importImage" class="primary full">IMPORTER IMAGE / GIF</button>
+                <label>Taille</label>
+                <div class="inline-controls">
+                  <select id="presetSize">
+                    <option value="8">8x8</option>
+                    <option value="16" selected>16x16</option>
+                    <option value="32">32x32</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                  <input id="frameW" type="number" value="16" min="1" />
+                  <input id="frameH" type="number" value="16" min="1" />
+                </div>
+                <label>Nom de base</label>
+                <input id="baseName" value="sprite" />
+                <label>Dossier</label>
+                <select id="folderName">
+                  <option>player</option><option>enemy</option><option>tiles</option><option>items</option><option>portraits</option><option>fx</option>
+                </select>
+                <label>Type</label>
+                <select id="usageType">
+                  <option value="frame">Simple frame</option><option value="animation">Animation</option><option value="object_player">Objet jouable</option><option value="object_enemy">Ennemi</option><option value="tile">Tile</option><option value="portrait">Portrait</option><option value="item">Item</option>
+                </select>
+                <button id="sliceImage" class="primary full">DÉCOUPER</button>
+                <button id="saveFrames" class="secondary full">SAUVER FRAMES.JSON</button>
+                <div class="memory-card">
+                  <p><span>Frames</span><strong id="memFrames">0</strong></p>
+                  <p><span>RGB565</span><strong id="memRaw">0 Ko</strong></p>
+                  <div class="bar"><div id="memBar"></div></div>
+                </div>
+              </section>
+              <section class="preview-panel">
+                <h2>Image source</h2>
+                <div class="canvas-wrap"><canvas id="sourceCanvas"></canvas></div>
+                <p id="imageInfo">Aucune image importée.</p>
+              </section>
+              <section class="frames-panel">
+                <div class="frames-title"><h2>Frames</h2><span id="frameCount">0 frame</span></div>
+                <div id="framesGrid" class="frames-grid"></div>
+              </section>
             </div>
-          </div>
+          </section>
 
-          <div class="music-actions">
-            <button id="musicApply" class="primary full">APPLIQUER</button>
-            <button id="musicPlay" class="secondary full">▶ PLAY</button>
-            <button id="musicStop" class="secondary full">■ STOP</button>
-          </div>
-
-          <h2>Mémoire</h2>
-          <div class="memory-card">
-            <p><span>Morceaux :</span><strong id="musicCount">0</strong></p>
-            <p><span>Notes/steps :</span><strong id="musicStepsInfo">0</strong></p>
-            <p><span>LMUS estimé :</span><strong id="musicBytes">0 o</strong></p>
-            <div class="bar"><div id="musicMemBar"></div></div>
-            <p id="musicWarn">Très léger : parfait pour piezo.</p>
-          </div>
-        </section>
-
-        <section class="music-main db-edit-panel">
-          <div class="db-panel-title">
-            <h2>Partition</h2>
-            <div class="music-legend">
-              <span>Buzzer A = mélodie</span>
-              <span>Buzzer B = basse / effet</span>
+          <section id="logicPanel" class="panel">
+            <div class="help-box"><strong>V0.5 :</strong> base objets/events. Crée les briques logiques du jeu.</div>
+            <div class="two-cols">
+              <section class="tool-panel">
+                <h2>Object Database</h2>
+                <input id="objName" placeholder="player, guard, red_door..." />
+                <select id="objType">
+                  <option>PLAYER</option><option>ENEMY</option><option>NPC</option><option>ITEM</option><option>PROJECTILE</option><option>DOOR</option><option>TRIGGER</option><option>BOSS</option>
+                </select>
+                <input id="objTags" placeholder="tags: solid, enemy, interactive" />
+                <input id="objBehavior" placeholder="behavior: TopDownMovement, EnemyPatrol..." />
+                <button id="addObject" class="primary full">AJOUTER OBJET</button>
+                <div id="objectsList" class="data-list"></div>
+              </section>
+              <section class="tool-panel">
+                <h2>Event Database</h2>
+                <input id="eventName" placeholder="open_red_door" />
+                <select id="eventCondition">
+                  <option>On Start Scene</option><option>On Button Pressed</option><option>On Collision</option><option>On Interact</option><option>On Variable Equals</option><option>On Timer</option><option>On Dialogue Finished</option><option>On Enter Zone</option>
+                </select>
+                <select id="eventAction">
+                  <option>Start Dialogue</option><option>Change Scene</option><option>Give Item</option><option>Set Variable</option><option>Spawn Object</option><option>Destroy Object</option><option>Play Sound</option><option>Play Cutscene</option>
+                </select>
+                <input id="eventTarget" placeholder="target: intro_01, lab_02..." />
+                <button id="addEvent" class="primary full">AJOUTER EVENT</button>
+                <div id="eventsList" class="data-list"></div>
+              </section>
             </div>
-          </div>
-          <div class="music-table-wrap">
-            <table class="music-table">
-              <thead>
-                <tr>
-                  <th>Step</th>
-                  <th>Buzzer A</th>
-                  <th>Oct A</th>
-                  <th>Dur A</th>
-                  <th>Buzzer B</th>
-                  <th>Oct B</th>
-                  <th>Dur B</th>
-                </tr>
-              </thead>
-              <tbody id="musicGrid"></tbody>
-            </table>
-          </div>
+          </section>
+
+          <section id="musicPanel" class="panel">
+            <div class="help-box"><strong>V0.6 :</strong> éditeur musique 8-bit pour deux piezo buzzers.</div>
+            <div class="two-cols">
+              <section class="tool-panel">
+                <h2>Paramètres</h2>
+                <label>Nom musique</label><input id="songName" value="theme_01" />
+                <label>Tempo BPM</label><input id="songTempo" type="number" value="120" />
+                <label>Buzzer</label><select id="trackSelect"><option value="A">Buzzer A</option><option value="B">Buzzer B</option></select>
+                <label>Note</label><select id="noteSelect"><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option><option>REST</option></select>
+                <label>Octave</label><select id="octaveSelect"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+                <label>Durée</label><select id="durationSelect"><option value="125">1/16</option><option value="250" selected>1/8</option><option value="500">1/4</option><option value="1000">1/2</option></select>
+                <button id="addNote" class="primary full">AJOUTER NOTE</button>
+                <button id="playMusic" class="secondary full">PLAY / STOP</button>
+              </section>
+              <section class="tool-panel">
+                <h2>Séquence</h2>
+                <div class="track"><h3>Buzzer A</h3><div id="trackA" class="data-list"></div></div>
+                <div class="track"><h3>Buzzer B</h3><div id="trackB" class="data-list"></div></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="narrativePanel" class="panel">
+            <div class="help-box"><strong>V0.7 :</strong> dialogues, portraits, cutscenes et triggers narratifs.</div>
+            <div class="three-cols">
+              <section class="tool-panel">
+                <h2>Dialogue Editor</h2>
+                <input id="dialogId" placeholder="intro_radio_01" />
+                <input id="dialogSpeaker" placeholder="COMMANDER, NPC, HERO..." />
+                <input id="dialogPortrait" placeholder="portrait_id" />
+                <textarea id="dialogText" placeholder="Snake... tu m'entends ?"></textarea>
+                <input id="dialogNext" placeholder="next dialogue id" />
+                <label>Vitesse texte</label><input id="dialogSpeed" type="number" value="30" />
+                <button id="importPortrait" class="secondary full">IMPORTER PORTRAIT</button>
+                <button id="addDialogue" class="primary full">AJOUTER DIALOGUE</button>
+                <div id="dialoguesList" class="data-list"></div>
+              </section>
+
+              <section class="tool-panel">
+                <h2>Cutscene Timeline</h2>
+                <input id="cutsceneId" placeholder="intro_cutscene" />
+                <div class="inline-controls">
+                  <input id="cutTime" type="number" value="0" />
+                  <select id="cutAction"><option>Fade In</option><option>Fade Out</option><option>Start Dialogue</option><option>Move Object</option><option>Play Music</option><option>Play Sound</option><option>Shake Screen</option><option>Flash</option><option>Load Scene</option></select>
+                </div>
+                <input id="cutTarget" placeholder="target" />
+                <input id="cutValue" placeholder="value" />
+                <button id="addCutStep" class="secondary full">AJOUTER STEP</button>
+                <button id="addCutscene" class="primary full">SAUVER CUTSCENE</button>
+                <div id="cutSteps" class="data-list"></div>
+                <div id="cutscenesList" class="data-list"></div>
+              </section>
+
+              <section class="tool-panel">
+                <h2>Trigger System</h2>
+                <input id="triggerId" placeholder="trigger_intro" />
+                <select id="triggerCondition"><option>player_enter_zone</option><option>player_interact_npc</option><option>dialogue_finished</option><option>enemy_dead</option><option>item_collected</option><option>timer_finished</option></select>
+                <select id="triggerAction"><option>start_dialogue</option><option>play_cutscene</option><option>change_scene</option><option>set_variable</option><option>give_item</option><option>play_music</option></select>
+                <input id="triggerTarget" placeholder="intro_radio_01 / cutscene_id..." />
+                <button id="addTrigger" class="primary full">AJOUTER TRIGGER</button>
+                <div id="triggersList" class="data-list"></div>
+
+                <h2>Preview dialogue</h2>
+                <div class="dialog-preview">
+                  <div class="portrait-preview" id="portraitPreview">PORTRAIT</div>
+                  <div><strong id="previewSpeaker">SPEAKER</strong><p id="previewText">Le texte du dialogue apparaîtra ici.</p></div>
+                </div>
+              </section>
+            </div>
+          </section>
         </section>
       </div>
     </section>
-  </div>
-</section>
-
-
-</main>
-
-<script type="module" src="app.js"></script>
+  </main>
+  <script src="app.js"></script>
 </body>
 </html>
