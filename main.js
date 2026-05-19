@@ -102,7 +102,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   ensureProjectFolders(projectDir);
 
   const config = {
-    lumaStudioVersion: "1.0.1",
+    lumaStudioVersion: "1.1.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -135,6 +135,7 @@ START_SCENE "scene_001"
   );
 
   fs.writeFileSync(path.join(projectDir, "assets", "sprites", "frames.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "assets", "sprites", "animations.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "objects", "objects.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "events", "events.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "music", "music.json"), JSON.stringify([], null, 2), "utf8");
@@ -172,6 +173,7 @@ ipcMain.handle("project:open", async () => {
   const projectData = {
     config,
     frames: readJsonSafe(path.join(projectDir, "assets", "sprites", "frames.json"), []),
+    animations: readJsonSafe(path.join(projectDir, "assets", "sprites", "animations.json"), []),
     objects: readJsonSafe(path.join(projectDir, "objects", "objects.json"), []),
     events: readJsonSafe(path.join(projectDir, "events", "events.json"), []),
     music: readJsonSafe(path.join(projectDir, "music", "music.json"), []),
@@ -246,6 +248,13 @@ ipcMain.handle("asset:save-frames", async (_event, frames) => {
   const framesPath = path.join(currentProjectPath, "assets", "sprites", "frames.json");
   fs.writeFileSync(framesPath, JSON.stringify(frames, null, 2), "utf8");
   return { ok: true, path: framesPath };
+});
+
+ipcMain.handle("asset:save-animations", async (_event, animations) => {
+  if (!currentProjectPath) return { ok: false, error: "Aucun projet actif." };
+  const animPath = path.join(currentProjectPath, "assets", "sprites", "animations.json");
+  fs.writeFileSync(animPath, JSON.stringify(animations || [], null, 2), "utf8");
+  return { ok: true, path: animPath };
 });
 
 ipcMain.handle("logic:save-v05", async (_event, data) => {
@@ -427,6 +436,8 @@ function makeLPK(projectDir, outputPath, secureKey = null) {
 
 function makeGameLuma(projectDir, outputPath, secureKey = null) {
   const config = readJsonSafe(path.join(projectDir, "config.json"), {});
+  const frames = readJsonSafe(path.join(projectDir, "assets", "sprites", "frames.json"), []);
+  const animations = readJsonSafe(path.join(projectDir, "assets", "sprites", "animations.json"), []);
   const objects = readJsonSafe(path.join(projectDir, "objects", "objects.json"), []);
   const events = readJsonSafe(path.join(projectDir, "events", "events.json"), []);
   const music = readJsonSafe(path.join(projectDir, "music", "music.json"), {});
@@ -439,6 +450,8 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
   const gameData = {
     magic: "LUMA_GAME_V1",
     config,
+    frames,
+    animations,
     objects,
     events,
     music,
@@ -553,7 +566,7 @@ ipcMain.handle("build:game-v09", async (_event, options) => {
   const manifest = {
     name: config.projectName || gameName,
     editor: config.editorName || "Unknown",
-    version: "1.0.1",
+    version: "1.1.0",
     type: "luma_game",
     entry: gameFile,
     assets: assetsFile,

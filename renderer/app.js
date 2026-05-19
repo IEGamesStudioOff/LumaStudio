@@ -2,6 +2,7 @@ let selectedSize = "550ko";
 let projectLimitBytes = 550 * 1024;
 let importedImage = null;
 let frames = [];
+let animations = [];
 let objects = [];
 let events = [];
 let nextObjectId = 1;
@@ -48,6 +49,8 @@ function enterStudio(path, data = null) {
   studio.classList.add("active");
   if (data) {
     frames = data.frames || [];
+    animations = data.animations || [];
+    if (typeof window !== "undefined") window.animations = animations;
     objects = data.objects || [];
     events = data.events || [];
     nextObjectId = Math.max(0, ...objects.map(o => Number(o.id) || 0)) + 1;
@@ -360,7 +363,10 @@ $("addTrigger").addEventListener("click", () => {
 });
 
 $("saveAll").addEventListener("click", async () => {
+  // Sync les anims depuis le module si nécessaire
+  if (window.LumaAnimEditor) animations = window.LumaAnimEditor.getAnimations() || animations;
   await window.lumaAPI.saveFrames(frames);
+  if (window.lumaAPI.saveAnimations) await window.lumaAPI.saveAnimations(animations);
   await window.lumaAPI.saveLogic({ objects, events, variables: [] });
   await window.lumaAPI.saveMusic(music);
   const r1 = await window.lumaAPI.saveNarrative({ dialogues, cutscenes, triggers });
@@ -396,7 +402,13 @@ function renderDialogues() { renderList("dialoguesList", dialogues, d => `<stron
 function renderCutSteps() { renderList("cutSteps", currentCutSteps, s => `<strong>${s.time}s</strong> ${s.action}<br>${s.target} ${s.value}`); }
 function renderCutscenes() { renderList("cutscenesList", cutscenes, c => `<strong>${c.id}</strong><br>${c.steps.length} step(s)`); }
 function renderTriggers() { renderList("triggersList", triggers, t => `<strong>${t.id}</strong><br>IF ${t.condition}<br>THEN ${t.action} → ${t.target}`); }
-function renderAll() { renderObjects(); renderEvents(); renderMusic(); renderDialogues(); renderCutscenes(); renderTriggers(); renderSceneEditor(); }
+function renderAll() {
+  renderObjects(); renderEvents(); renderMusic(); renderDialogues(); renderCutscenes(); renderTriggers(); renderSceneEditor();
+  if (window.LumaAnimEditor) {
+    window.animations = animations;
+    window.LumaAnimEditor.setAnimations(animations);
+  }
+}
 
 
 
