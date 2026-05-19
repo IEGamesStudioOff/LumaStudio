@@ -102,7 +102,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   ensureProjectFolders(projectDir);
 
   const config = {
-    lumaStudioVersion: "0.7.0",
+    lumaStudioVersion: "1.0.1",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -294,13 +294,10 @@ ipcMain.handle("narrative:save", async (_event, data) => {
     preview += `TRIGGER ${t.id} IF ${t.condition} THEN ${t.action} ${t.target}\n`;
   }
 
-  fs.writeFileSync(path.join(currentProjectPath, "exports",
-    "exports/builds",
-    "exports/secure", "narrative_preview.luma"), preview, "utf8");
+  const narrativePreviewPath = path.join(currentProjectPath, "exports", "narrative_preview.luma");
+  fs.writeFileSync(narrativePreviewPath, preview, "utf8");
 
-  return { ok: true, path: path.join(currentProjectPath, "exports",
-    "exports/builds",
-    "exports/secure", "narrative_preview.luma") };
+  return { ok: true, path: narrativePreviewPath };
 });
 
 
@@ -342,9 +339,8 @@ ipcMain.handle("scene:save-v08", async (_event, data) => {
     preview += `END_SCENE\n\n`;
   }
 
-  fs.writeFileSync(path.join(currentProjectPath, "exports",
-    "exports/builds",
-    "exports/secure", "scene_preview.luma"), preview, "utf8");
+  const scenePreviewPath = path.join(currentProjectPath, "exports", "scene_preview.luma");
+  fs.writeFileSync(scenePreviewPath, preview, "utf8");
 
   // First simple binary map export: width u16, height u16, then tile indices as bytes
   for (const map of maps) {
@@ -359,9 +355,7 @@ ipcMain.handle("scene:save-v08", async (_event, data) => {
 
   return {
     ok: true,
-    path: path.join(currentProjectPath, "exports",
-    "exports/builds",
-    "exports/secure", "scene_preview.luma")
+    path: scenePreviewPath
   };
 });
 
@@ -559,7 +553,7 @@ ipcMain.handle("build:game-v09", async (_event, options) => {
   const manifest = {
     name: config.projectName || gameName,
     editor: config.editorName || "Unknown",
-    version: "0.9.0",
+    version: "1.0.1",
     type: "luma_game",
     entry: gameFile,
     assets: assetsFile,

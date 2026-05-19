@@ -4,6 +4,8 @@ let importedImage = null;
 let frames = [];
 let objects = [];
 let events = [];
+let nextObjectId = 1;
+let nextEventId = 1;
 let music = { name: "theme_01", tempo: 120, tracks: { A: [], B: [] } };
 let dialogues = [];
 let cutscenes = [];
@@ -48,6 +50,8 @@ function enterStudio(path, data = null) {
     frames = data.frames || [];
     objects = data.objects || [];
     events = data.events || [];
+    nextObjectId = Math.max(0, ...objects.map(o => Number(o.id) || 0)) + 1;
+    nextEventId = Math.max(0, ...events.map(e => Number(e.id) || 0)) + 1;
     music = Array.isArray(data.music) ? { name: "theme_01", tempo: 120, tracks: { A: [], B: [] } } : (data.music || music);
     dialogues = data.dialogues || [];
     cutscenes = data.cutscenes || [];
@@ -214,7 +218,7 @@ function formatBytes(bytes) {
 // V0.5 Logic
 $("addObject").addEventListener("click", () => {
   objects.push({
-    id: Date.now(),
+    id: nextObjectId++,
     name: $("objName").value || "object",
     type: $("objType").value,
     tags: $("objTags").value.split(",").map(t => t.trim()).filter(Boolean),
@@ -225,7 +229,7 @@ $("addObject").addEventListener("click", () => {
 
 $("addEvent").addEventListener("click", () => {
   events.push({
-    id: Date.now(),
+    id: nextEventId++,
     name: $("eventName").value || "event",
     condition: $("eventCondition").value,
     action: $("eventAction").value,
@@ -248,18 +252,31 @@ $("addNote").addEventListener("click", () => {
 });
 
 $("playMusic").addEventListener("click", () => {
-  if (playing) { playing = false; return; }
+  if (playing) {
+    playing = false;
+    if (audioCtx) {
+      // Stop tous les oscillateurs actifs
+      activeOscillators.forEach(osc => { try { osc.stop(); } catch (_) {} });
+      activeOscillators = [];
+    }
+    return;
+  }
+  if (!audioCtx) audioCtx = new AudioContext();
   playing = true;
-  playTrack("A");
-  setTimeout(() => playTrack("B"), 20);
+  activeOscillators = [];
+  const startAt = audioCtx.currentTime + 0.05;
+  // Bug #14 fix: les deux pistes partagent la MÊME base de temps de départ
+  scheduleTrack("A", startAt);
+  scheduleTrack("B", startAt);
 });
 
-function playTrack(trackName) {
-  if (!audioCtx) audioCtx = new AudioContext();
-  let time = audioCtx.currentTime;
+let activeOscillators = [];
+
+function scheduleTrack(trackName, baseTime) {
+  let time = baseTime;
   const track = music.tracks[trackName];
+  let lastEnd = time;
   for (const n of track) {
-    if (!playing) break;
     const dur = n.duration / 1000;
     if (n.note !== "REST") {
       const osc = audioCtx.createOscillator();
@@ -270,10 +287,15 @@ function playTrack(trackName) {
       osc.connect(gain).connect(audioCtx.destination);
       osc.start(time);
       osc.stop(time + dur);
+      activeOscillators.push(osc);
     }
     time += dur;
+    lastEnd = time;
   }
-  setTimeout(() => playing = false, Math.max(100, (time - audioCtx.currentTime) * 1000));
+  setTimeout(() => {
+    // Marque inactif quand la piste la plus longue est terminée
+    if (audioCtx && lastEnd <= audioCtx.currentTime + 0.05) playing = false;
+  }, Math.max(100, (lastEnd - baseTime) * 1000 + 50));
 }
 
 function noteFreq(note, octave) {
@@ -341,8 +363,16 @@ $("saveAll").addEventListener("click", async () => {
   await window.lumaAPI.saveFrames(frames);
   await window.lumaAPI.saveLogic({ objects, events, variables: [] });
   await window.lumaAPI.saveMusic(music);
-  const result = await window.lumaAPI.saveNarrative({ dialogues, cutscenes, triggers });
-  alert(result.ok ? "Projet sauvegardé." : result.error || "Erreur sauvegarde.");
+  const r1 = await window.lumaAPI.saveNarrative({ dialogues, cutscenes, triggers });
+  let r2 = { ok: true };
+  if (currentMap && currentScene) {
+    r2 = await window.lumaAPI.saveSceneData({ maps, scenes });
+  }
+  if (!r1.ok || !r2.ok) {
+    alert(r1.error || r2.error || "Erreur sauvegarde.");
+  } else {
+    alert("Projet sauvegardé.");
+  }
 });
 
 function renderList(id, items, map) {
@@ -437,9 +467,13 @@ $("toggleCamera").addEventListener("click", () => {
 });
 
 $("centerCamera").addEventListener("click", () => {
-  if (!currentScene) return;
-  camera.x = Math.max(0, currentScene.playerSpawn.x - 80);
-  camera.y = Math.max(0, currentScene.playerSpawn.y - 64);
+  if (!currentScene || !currentMap) return;
+  const mapPxW = currentMap.width * currentMap.tileSize;
+  const mapPxH = currentMap.height * currentMap.tileSize;
+  const maxX = Math.max(0, mapPxW - camera.w);
+  const maxY = Math.max(0, mapPxH - camera.h);
+  camera.x = Math.max(0, Math.min(maxX, currentScene.playerSpawn.x - camera.w / 2));
+  camera.y = Math.max(0, Math.min(maxY, currentScene.playerSpawn.y - camera.h / 2));
   renderSceneEditor();
 });
 
@@ -448,8 +482,7 @@ $("playScenePreview").addEventListener("click", () => {
   if (testPlayer.active && currentScene) {
     testPlayer.x = currentScene.playerSpawn.x;
     testPlayer.y = currentScene.playerSpawn.y;
-    camera.x = Math.max(0, testPlayer.x - 80);
-    camera.y = Math.max(0, testPlayer.y - 64);
+    centerCameraOnPlayer();
   }
   renderSceneEditor();
 });
@@ -484,8 +517,12 @@ mapCanvas.addEventListener("mousedown", (event) => {
     testPlayer.x = currentScene.playerSpawn.x;
     testPlayer.y = currentScene.playerSpawn.y;
   } else if (tool === "camera") {
-    camera.x = Math.max(0, px - 80);
-    camera.y = Math.max(0, py - 64);
+    const mapPxW = currentMap.width * currentMap.tileSize;
+    const mapPxH = currentMap.height * currentMap.tileSize;
+    const maxX = Math.max(0, mapPxW - camera.w);
+    const maxY = Math.max(0, mapPxH - camera.h);
+    camera.x = Math.max(0, Math.min(maxX, px - camera.w / 2));
+    camera.y = Math.max(0, Math.min(maxY, py - camera.h / 2));
   } else if (tool === "object") {
     const objectId = $("placeObjectId").value || "object";
     currentScene.objects.push({
@@ -516,26 +553,64 @@ window.addEventListener("keydown", (event) => {
   if (!testPlayer.active || !currentMap) return;
 
   const speed = 4;
-  let nx = testPlayer.x;
-  let ny = testPlayer.y;
+  let dx = 0;
+  let dy = 0;
 
-  if (event.key === "ArrowLeft") nx -= speed;
-  if (event.key === "ArrowRight") nx += speed;
-  if (event.key === "ArrowUp") ny -= speed;
-  if (event.key === "ArrowDown") ny += speed;
+  if (event.key === "ArrowLeft") dx = -speed;
+  if (event.key === "ArrowRight") dx = speed;
+  if (event.key === "ArrowUp") dy = -speed;
+  if (event.key === "ArrowDown") dy = speed;
 
-  if (!isSolidAt(nx, ny) && !isSolidAt(nx + testPlayer.size, ny + testPlayer.size)) {
-    testPlayer.x = nx;
-    testPlayer.y = ny;
+  if (dx === 0 && dy === 0) return;
+  event.preventDefault();
+
+  // Bug #2 fix: test X et Y séparément pour permettre le sliding le long des murs
+  if (dx !== 0) {
+    const nx = testPlayer.x + dx;
+    if (canStandAt(nx, testPlayer.y, testPlayer.size)) {
+      testPlayer.x = nx;
+    } else {
+      // Snap au bord du mur pour éviter le "pixel coincé"
+      const t = currentMap.tileSize;
+      if (dx > 0) {
+        const wallX = Math.floor((testPlayer.x + testPlayer.size + dx) / t) * t;
+        testPlayer.x = Math.max(testPlayer.x, wallX - testPlayer.size);
+      } else {
+        const wallX = (Math.floor((testPlayer.x + dx) / t) + 1) * t;
+        testPlayer.x = Math.min(testPlayer.x, wallX);
+      }
+    }
+  }
+  if (dy !== 0) {
+    const ny = testPlayer.y + dy;
+    if (canStandAt(testPlayer.x, ny, testPlayer.size)) {
+      testPlayer.y = ny;
+    } else {
+      const t = currentMap.tileSize;
+      if (dy > 0) {
+        const wallY = Math.floor((testPlayer.y + testPlayer.size + dy) / t) * t;
+        testPlayer.y = Math.max(testPlayer.y, wallY - testPlayer.size);
+      } else {
+        const wallY = (Math.floor((testPlayer.y + dy) / t) + 1) * t;
+        testPlayer.y = Math.min(testPlayer.y, wallY);
+      }
+    }
   }
 
   if (currentScene?.cameraMode === "follow_player") {
-    camera.x = Math.max(0, testPlayer.x - 80);
-    camera.y = Math.max(0, testPlayer.y - 64);
+    centerCameraOnPlayer();
   }
 
   renderSceneEditor();
 });
+
+// Bug #2 fix: teste les 4 coins du joueur, pas seulement 2
+function canStandAt(px, py, size) {
+  return !isSolidAt(px, py)
+    && !isSolidAt(px + size - 1, py)
+    && !isSolidAt(px, py + size - 1)
+    && !isSolidAt(px + size - 1, py + size - 1);
+}
 
 function isSolidAt(px, py) {
   const t = currentMap.tileSize;
@@ -543,6 +618,17 @@ function isSolidAt(px, py) {
   const ty = Math.floor(py / t);
   if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return true;
   return currentMap.layers.collision[ty * currentMap.width + tx] > 0;
+}
+
+// Bug #3 fix: clamp caméra sur les 4 bords (gauche, haut, droite, bas)
+function centerCameraOnPlayer() {
+  if (!currentMap) return;
+  const mapPxW = currentMap.width * currentMap.tileSize;
+  const mapPxH = currentMap.height * currentMap.tileSize;
+  const maxX = Math.max(0, mapPxW - camera.w);
+  const maxY = Math.max(0, mapPxH - camera.h);
+  camera.x = Math.max(0, Math.min(maxX, testPlayer.x + testPlayer.size / 2 - camera.w / 2));
+  camera.y = Math.max(0, Math.min(maxY, testPlayer.y + testPlayer.size / 2 - camera.h / 2));
 }
 
 function renderSceneEditor() {
@@ -665,8 +751,16 @@ function drawTriggers() {
 
 function renderLumaPreview() {
   lumaCtx.imageSmoothingEnabled = false;
-  lumaCtx.clearRect(0, 0, 160, 128);
-  lumaCtx.drawImage(mapCanvas, camera.x, camera.y, 160, 128, 0, 0, 160, 128);
+  lumaCtx.fillStyle = "#000000";
+  lumaCtx.fillRect(0, 0, 160, 128);
+  // Source clamp: jamais en dehors du mapCanvas (sinon Canvas2D ignore le draw)
+  const sx = Math.max(0, Math.min(mapCanvas.width - 1, camera.x));
+  const sy = Math.max(0, Math.min(mapCanvas.height - 1, camera.y));
+  const sw = Math.min(160, mapCanvas.width - sx);
+  const sh = Math.min(128, mapCanvas.height - sy);
+  if (sw > 0 && sh > 0) {
+    lumaCtx.drawImage(mapCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  }
 }
 
 function tileColor(id, layer) {

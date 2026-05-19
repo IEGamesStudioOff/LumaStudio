@@ -2,9 +2,33 @@
 #include "luma_config.h"
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+
+// Bug #11 fix: nettoyer le nom pour qu'il soit FAT-safe (pas d'espaces ni accents).
+static void safe_name(const char *in, char *out, int out_len) {
+    int j = 0;
+    for (int i = 0; in[i] && j < out_len - 1; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+            || c == '_' || c == '-') {
+            out[j++] = (char)c;
+        } else if (c == ' ' || c == '.') {
+            out[j++] = '_';
+        }
+        // tout autre caractère (accents, /, \, etc.) est ignoré
+    }
+    if (j == 0) {
+        // évite un nom vide
+        const char *fallback = "save";
+        for (int i = 0; fallback[i] && j < out_len - 1; i++) out[j++] = fallback[i];
+    }
+    out[j] = '\0';
+}
 
 static void save_path(luma_runtime_t *rt, char *out, int out_len) {
-    snprintf(out, out_len, "%s/%s.sav", LUMA_SAVES_DIR, rt->entry.name);
+    char clean[LUMA_MAX_NAME];
+    safe_name(rt->entry.name, clean, sizeof(clean));
+    snprintf(out, out_len, "%s/%s.sav", LUMA_SAVES_DIR, clean);
 }
 
 bool luma_save_game(luma_runtime_t *rt) {

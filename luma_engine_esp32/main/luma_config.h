@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define LUMA_VERSION "1.0.0"
+#define LUMA_VERSION "1.0.1"
 
 // Screen
 #define LUMA_LCD_WIDTH   160
@@ -49,6 +49,10 @@
 #define LUMA_MAX_SCENES      32
 #define LUMA_MAX_ASSETS      256
 #define LUMA_MAX_DIALOGUE    256
+
+// Max tiles d'une map chargée en RAM (ex: 64x64 = 4096 tiles par couche)
+// Chaque couche fait LUMA_MAX_MAP_TILES octets, on a 3 couches → ~12 Ko max.
+#define LUMA_MAX_MAP_TILES   4096
 
 // RGB565 colors
 #define LUMA_BLACK   0x0000

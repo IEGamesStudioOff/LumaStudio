@@ -122,22 +122,65 @@ void luma_render_text(int x, int y, const char *text, uint16_t color) {
     }
 }
 
+// Bug #6 fix: palette simple par ID de tile (8 entrées) — alignée sur l'éditeur.
+static const uint16_t TILE_PALETTE[8] = {
+    0x0000, // 0 = transparent / vide
+    0x18FF, // 1 = bleu primaire
+    0x5BFF, // 2 = bleu clair
+    0x07EE, // 3 = vert
+    0xFFEB, // 4 = jaune
+    0xF2AE, // 5 = rouge
+    0x07FF, // 6 = cyan
+    0xF81F  // 7 = magenta
+};
+
+static uint16_t tile_color(uint8_t id, bool decor) {
+    if (id == 0) return TILE_PALETTE[0];
+    uint8_t shifted = decor ? (uint8_t)((id + 2) & 0x07) : (uint8_t)(id & 0x07);
+    return TILE_PALETTE[shifted];
+}
+
 void luma_render_runtime(luma_runtime_t *rt) {
     luma_render_clear(LUMA_BLACK);
 
-    // Draw map as simple colored tiles until real tile assets are bound.
     int tile = rt->active_map.tile_size ? rt->active_map.tile_size : 16;
+    int map_w = rt->active_map.width;
+    int map_h = rt->active_map.height;
+
     int start_x = rt->camera_x / tile;
     int start_y = rt->camera_y / tile;
     int end_x = start_x + (LUMA_LCD_WIDTH / tile) + 2;
     int end_y = start_y + (LUMA_LCD_HEIGHT / tile) + 2;
+    if (start_x < 0) start_x = 0;
+    if (start_y < 0) start_y = 0;
+    if (end_x > map_w) end_x = map_w;
+    if (end_y > map_h) end_y = map_h;
 
+    // Bug #6 fix: dessine les vraies tiles depuis layer_floor puis layer_decor
     for (int ty = start_y; ty < end_y; ty++) {
         for (int tx = start_x; tx < end_x; tx++) {
+            int idx = ty * map_w + tx;
+            if (idx < 0 || idx >= LUMA_MAX_MAP_TILES) continue;
+
             int px = tx * tile - rt->camera_x;
             int py = ty * tile - rt->camera_y;
-            uint16_t c = ((tx + ty) % 2) ? 0x1082 : 0x2104;
-            luma_render_rect(px, py, tile - 1, tile - 1, c);
+
+            uint8_t f = rt->layer_floor[idx];
+            if (f) luma_render_rect(px, py, tile, tile, tile_color(f, false));
+
+            uint8_t d = rt->layer_decor[idx];
+            if (d) luma_render_rect(px, py, tile, tile, tile_color(d, true));
+        }
+    }
+
+    // Objets placés (rendu sommaire en attendant la liaison sprite/frame)
+    for (int i = 0; i < rt->object_count; i++) {
+        const luma_object_instance_t *o = &rt->objects[i];
+        if (!o->enabled) continue;
+        int ox = o->x - rt->camera_x;
+        int oy = o->y - rt->camera_y;
+        if (ox > -16 && ox < LUMA_LCD_WIDTH && oy > -16 && oy < LUMA_LCD_HEIGHT) {
+            luma_render_rect(ox, oy, 14, 14, LUMA_CYAN);
         }
     }
 

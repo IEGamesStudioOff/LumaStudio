@@ -11,16 +11,19 @@
 #include "luma_render.h"
 #include "luma_input.h"
 #include "luma_audio.h"
+#include "luma_lpk.h"
 
 static const char *TAG = "LUMA_MAIN";
 
 static luma_game_entry_t games[LUMA_MAX_GAMES];
 static luma_runtime_t runtime;
+static luma_lpk_t s_assets;
+static bool s_assets_open = false;
 
 static void draw_launcher(int game_count, int selected) {
     luma_render_clear(LUMA_BLACK);
     luma_render_rect(0, 0, 160, 16, LUMA_BLUE);
-    luma_render_text(6, 5, "LUMA ENGINE 1.0", LUMA_WHITE);
+    luma_render_text(6, 5, "LUMA ENGINE 1.0.1", LUMA_WHITE);
 
     if (game_count <= 0) {
         luma_render_text(12, 42, "NO GAME FOUND", LUMA_RED);
@@ -35,7 +38,7 @@ static void draw_launcher(int game_count, int selected) {
 }
 
 void app_main(void) {
-    ESP_LOGI(TAG, "Starting Luma Engine 1.0");
+    ESP_LOGI(TAG, "Starting Luma Engine 1.0.1");
 
     nvs_flash_init();
     luma_input_init();
@@ -78,6 +81,16 @@ void app_main(void) {
     }
 
     if (game_count > 0) {
+        // Bug #6 corollaire fix: ouvrir le LPK d'assets pour la phase suivante
+        // (rendu sprites, sons). Pour l'instant on log les assets trouvés.
+        if (luma_lpk_open(&s_assets, games[selected].assets_path)) {
+            s_assets_open = true;
+            ESP_LOGI(TAG, "Assets pack open: %s (%u assets)",
+                     games[selected].assets_path, s_assets.asset_count);
+        } else {
+            ESP_LOGW(TAG, "No assets pack loaded for %s", games[selected].name);
+        }
+
         if (luma_game_load(&runtime, &games[selected])) {
             luma_runtime_init(&runtime);
 
@@ -91,6 +104,11 @@ void app_main(void) {
         } else {
             luma_render_clear(LUMA_BLACK);
             luma_render_text(20, 50, "LOAD FAILED", LUMA_RED);
+        }
+
+        if (s_assets_open) {
+            luma_lpk_close(&s_assets);
+            s_assets_open = false;
         }
     }
 

@@ -66,6 +66,10 @@ typedef struct {
     luma_game_entry_t entry;
     luma_scene_t active_scene;
     luma_map_t active_map;
+    // Bug #5/#6 fix: couches de tiles chargées en RAM pour rendu et collision
+    uint8_t layer_floor[LUMA_MAX_MAP_TILES];
+    uint8_t layer_decor[LUMA_MAX_MAP_TILES];
+    uint8_t layer_collision[LUMA_MAX_MAP_TILES];
     luma_player_t player;
     luma_object_instance_t objects[LUMA_MAX_OBJECTS];
     luma_trigger_t triggers[LUMA_MAX_TRIGGERS];

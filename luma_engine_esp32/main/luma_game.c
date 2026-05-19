@@ -53,6 +53,9 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
         rt->active_scene.spawn_y = 32;
         rt->player.x = 32;
         rt->player.y = 32;
+        rt->active_map.width = 20;
+        rt->active_map.height = 15;
+        rt->active_map.tile_size = 16;
         return true;
     }
 
@@ -84,21 +87,64 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
     rt->player.y = rt->active_scene.spawn_y;
     rt->player.hp = 3;
 
-    // Load map metadata from game JSON
+    // Bug #5/#6 fix: charger les couches floor/decor/collision depuis maps.json
+    memset(rt->layer_floor, 0, sizeof(rt->layer_floor));
+    memset(rt->layer_decor, 0, sizeof(rt->layer_decor));
+    memset(rt->layer_collision, 0, sizeof(rt->layer_collision));
+
     if (cJSON_IsArray(maps)) {
         for (int i = 0; i < cJSON_GetArraySize(maps); i++) {
             const cJSON *map = cJSON_GetArrayItem(maps, i);
             const cJSON *id = cJSON_GetObjectItem(map, "id");
-            if (cJSON_IsString(id) && strcmp(id->valuestring, rt->active_scene.map_id) == 0) {
-                const cJSON *w = cJSON_GetObjectItem(map, "width");
-                const cJSON *h = cJSON_GetObjectItem(map, "height");
-                const cJSON *tile = cJSON_GetObjectItem(map, "tileSize");
-                strncpy(rt->active_map.id, id->valuestring, LUMA_MAX_NAME - 1);
-                rt->active_map.width = cJSON_IsNumber(w) ? w->valueint : 20;
-                rt->active_map.height = cJSON_IsNumber(h) ? h->valueint : 15;
-                rt->active_map.tile_size = cJSON_IsNumber(tile) ? tile->valueint : 16;
-                break;
+            if (!cJSON_IsString(id) || strcmp(id->valuestring, rt->active_scene.map_id) != 0) continue;
+
+            const cJSON *w = cJSON_GetObjectItem(map, "width");
+            const cJSON *h = cJSON_GetObjectItem(map, "height");
+            const cJSON *tile = cJSON_GetObjectItem(map, "tileSize");
+            strncpy(rt->active_map.id, id->valuestring, LUMA_MAX_NAME - 1);
+            rt->active_map.width = cJSON_IsNumber(w) ? w->valueint : 20;
+            rt->active_map.height = cJSON_IsNumber(h) ? h->valueint : 15;
+            rt->active_map.tile_size = cJSON_IsNumber(tile) ? tile->valueint : 16;
+
+            uint32_t total = (uint32_t)rt->active_map.width * (uint32_t)rt->active_map.height;
+            if (total > LUMA_MAX_MAP_TILES) {
+                ESP_LOGW(TAG, "Map %s too big (%u tiles), truncating to %d.",
+                         rt->active_map.id, (unsigned)total, LUMA_MAX_MAP_TILES);
+                total = LUMA_MAX_MAP_TILES;
             }
+
+            const cJSON *layers = cJSON_GetObjectItem(map, "layers");
+            if (layers) {
+                const cJSON *floor = cJSON_GetObjectItem(layers, "floor");
+                const cJSON *decor = cJSON_GetObjectItem(layers, "decor");
+                const cJSON *coll  = cJSON_GetObjectItem(layers, "collision");
+
+                if (cJSON_IsArray(floor)) {
+                    int n = cJSON_GetArraySize(floor);
+                    if ((uint32_t)n > total) n = (int)total;
+                    for (int k = 0; k < n; k++) {
+                        const cJSON *v = cJSON_GetArrayItem(floor, k);
+                        rt->layer_floor[k] = cJSON_IsNumber(v) ? (uint8_t)(v->valueint & 0xFF) : 0;
+                    }
+                }
+                if (cJSON_IsArray(decor)) {
+                    int n = cJSON_GetArraySize(decor);
+                    if ((uint32_t)n > total) n = (int)total;
+                    for (int k = 0; k < n; k++) {
+                        const cJSON *v = cJSON_GetArrayItem(decor, k);
+                        rt->layer_decor[k] = cJSON_IsNumber(v) ? (uint8_t)(v->valueint & 0xFF) : 0;
+                    }
+                }
+                if (cJSON_IsArray(coll)) {
+                    int n = cJSON_GetArraySize(coll);
+                    if ((uint32_t)n > total) n = (int)total;
+                    for (int k = 0; k < n; k++) {
+                        const cJSON *v = cJSON_GetArrayItem(coll, k);
+                        rt->layer_collision[k] = cJSON_IsNumber(v) ? (uint8_t)(v->valueint & 0xFF) : 0;
+                    }
+                }
+            }
+            break;
         }
     }
 
@@ -108,7 +154,8 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
         rt->active_map.tile_size = 16;
     }
 
-    ESP_LOGI(TAG, "Loaded scene: %s", rt->active_scene.id);
+    ESP_LOGI(TAG, "Loaded scene: %s (map %dx%d, tile %d)",
+             rt->active_scene.id, rt->active_map.width, rt->active_map.height, rt->active_map.tile_size);
     return true;
 }
 
