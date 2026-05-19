@@ -2,77 +2,261 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio</title>
+  <title>Luma Studio v0.3</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main>
-    <section id="splash" class="screen active">
-      <div class="scanlines"></div>
-      <div class="stars"></div>
+<main>
 
-      <div class="retro-panel splash-box">
-        <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
-        <p class="subtitle">LUMA.LAOSENGINE2.0</p>
-        <p class="loading">CHARGEMENT<span id="dots">...</span></p>
+  <!-- SPLASH -->
+  <section id="splash" class="screen active">
+    <div class="scanlines"></div>
+    <div class="stars"></div>
+    <div class="retro-panel splash-box">
+      <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
+      <p class="subtitle">LUMA.LAOSENGINE2.0</p>
+      <p class="loading">CHARGEMENT<span id="dots">...</span></p>
+    </div>
+  </section>
+
+  <!-- PROJET -->
+  <section id="project" class="screen">
+    <div class="scanlines"></div>
+    <div class="stars"></div>
+    <div class="retro-panel project-box">
+      <div class="titlebar"><span>NOUVEAU PROJET</span></div>
+      <div class="project-content">
+        <div class="form-side">
+          <label for="projectName">Nom du projet</label>
+          <input id="projectName" value="MonProjet" maxlength="32" />
+          <label for="editorName">Nom de l'éditeur</label>
+          <input id="editorName" value="I.E.Games_Studio" maxlength="32" />
+        </div>
+        <div class="separator"></div>
+        <div class="size-side">
+          <label>Taille du jeu</label>
+          <button class="size-option" data-size="180ko"><span class="disk">▣</span><strong>180 Ko</strong><em>Petit prototype</em></button>
+          <button class="size-option selected" data-size="550ko"><span class="cursor">▶</span><span class="disk">▣</span><strong>550 Ko</strong><em>Standard rétro</em></button>
+          <button class="size-option" data-size="2mo"><span class="disk">▣</span><strong>2 Mo</strong><em>Grand jeu</em></button>
+        </div>
       </div>
-    </section>
+      <footer>
+        <p id="status">Prêt à créer un projet Luma.</p>
+        <button id="createProject">CRÉER LE PROJET</button>
+      </footer>
+    </div>
+  </section>
 
-    <section id="project" class="screen">
-      <div class="scanlines"></div>
-      <div class="stars"></div>
+  <!-- ASSET LAB -->
+  <section id="assetLab" class="screen lab-screen">
+    <div class="scanlines"></div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
+        <button class="nav-btn active" id="navAsset">ASSET LAB</button>
+        <button class="nav-btn disabled" id="navSprite">SPRITE EDITOR</button>
+        <button class="nav-btn disabled">MAP EDITOR</button>
+        <button class="nav-btn disabled">EVENTS</button>
+        <div class="project-path" id="projectPath">Aucun projet</div>
+      </aside>
 
-      <div class="retro-panel project-box">
-        <div class="titlebar">
-          <span>NOUVEAU PROJET</span>
-          <button class="close-btn" aria-label="Fermer">×</button>
+      <section class="workspace">
+        <header class="workspace-header">
+          <div>
+            <h1>ASSET LAB</h1>
+            <p>Importer, découper, sélectionner et estimer la mémoire des sprites.</p>
+          </div>
+          <div class="header-buttons">
+            <button id="openSpriteEditor" class="secondary disabled" disabled>OUVRIR ÉDITEUR</button>
+            <button id="exportLpk"        class="secondary">EXPORT .LPK</button>
+            <button id="importImage"      class="primary">IMPORTER IMAGE / GIF</button>
+          </div>
+        </header>
+
+        <div class="help-box">
+          <strong>Principe :</strong>
+          une spritesheet est une grande image découpée en cases. Chaque case devient une frame.
+          Clique une frame pour la sélectionner, double-clique (ou bouton OUVRIR ÉDITEUR) pour la pixel-editer.
         </div>
 
-        <div class="project-content">
-          <div class="form-side">
-            <label for="projectName">Nom du projet</label>
-            <input id="projectName" value="MonProjet" maxlength="32" />
+        <div class="lab-grid">
+          <section class="tool-panel">
+            <h2>Découpe</h2>
 
-            <label for="editorName">Nom de l’éditeur</label>
-            <input id="editorName" value="I.E.Games_Studio" maxlength="32" />
-          </div>
+            <label>Taille de frame</label>
+            <div class="inline-controls">
+              <select id="presetSize">
+                <option value="8">8 x 8</option>
+                <option value="16" selected>16 x 16</option>
+                <option value="32">32 x 32</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input id="frameW" type="number" value="16" min="1" />
+              <input id="frameH" type="number" value="16" min="1" />
+            </div>
 
-          <div class="separator"></div>
+            <label>Nom de base</label>
+            <input id="baseName" value="sprite" />
 
-          <div class="size-side">
-            <label>Taille du jeu</label>
+            <label>Dossier / catégorie</label>
+            <select id="folderName">
+              <option value="player">player</option>
+              <option value="enemy">enemy</option>
+              <option value="tiles">tiles</option>
+              <option value="items">items</option>
+              <option value="portraits">portraits</option>
+              <option value="fx">fx</option>
+            </select>
 
-            <button class="size-option" data-size="180ko">
-              <span class="disk">▣</span>
-              <strong>180 Ko</strong>
-              <em>Petit prototype</em>
-            </button>
+            <label>Type d'usage</label>
+            <select id="usageType">
+              <option value="frame">Simple frame</option>
+              <option value="animation">Animation</option>
+              <option value="object_player">Objet jouable</option>
+              <option value="object_enemy">Ennemi</option>
+              <option value="tile">Tile décor</option>
+              <option value="portrait">Portrait dialogue</option>
+              <option value="item">Item</option>
+            </select>
 
-            <button class="size-option selected" data-size="550ko">
-              <span class="cursor">▶</span>
-              <span class="disk">▣</span>
-              <strong>550 Ko</strong>
-              <em>Standard rétro</em>
-            </button>
+            <button id="sliceImage" class="primary full">DÉCOUPER</button>
+            <button id="saveFrames" class="secondary full">SAUVER FRAMES.JSON</button>
 
-            <button class="size-option" data-size="2mo">
-              <span class="disk">▣</span>
-              <strong>2 Mo</strong>
-              <em>Grand jeu</em>
-            </button>
-          </div>
+            <h2>Mémoire</h2>
+            <div class="memory-card">
+              <p><span>Frames :</span><strong id="memFrames">0</strong></p>
+              <p><span>Pixel data :</span><strong id="memRaw">0 Ko</strong></p>
+              <p><span>Limite projet :</span><strong id="memLimit">550ko</strong></p>
+              <div class="bar"><div id="memBar"></div></div>
+              <p id="memWarn">Importe une image pour estimer la mémoire.</p>
+            </div>
+          </section>
+
+          <section class="preview-panel">
+            <h2>Image source</h2>
+            <div class="canvas-wrap">
+              <canvas id="sourceCanvas"></canvas>
+            </div>
+            <p id="imageInfo">Aucune image importée.</p>
+
+            <h2 style="margin-top:18px">Aperçu frame sélectionnée</h2>
+            <div id="previewWrap" class="canvas-wrap small">
+              <canvas id="previewCanvas"></canvas>
+            </div>
+            <p id="previewInfo">Sélectionne une frame pour l'agrandir.</p>
+          </section>
+
+          <section class="frames-panel">
+            <div class="frames-title">
+              <h2>Frames découpées</h2>
+              <span id="frameCount">0 frame</span>
+            </div>
+            <div id="framesGrid" class="frames-grid"></div>
+          </section>
         </div>
 
-        <footer>
-          <p id="status">Prêt à créer un projet Luma.</p>
-          <button id="createProject">CRÉER LE PROJET</button>
-        </footer>
-      </div>
-    </section>
-  </main>
+        <section class="editor-preview">
+          <h2>Palette ST7735 (32 couleurs RGB565)</h2>
+          <div class="palette-row" id="paletteRow"></div>
+          <p>Double-clique une frame ou utilise OUVRIR ÉDITEUR pour passer en édition pixel.
+             EXPORT .LPK génère <code>build/sprites.lpk</code> au format binaire RGB565.</p>
+        </section>
+      </section>
+    </div>
+  </section>
 
-  <script src="app.js"></script>
+  <!-- SPRITE EDITOR -->
+  <section id="spriteEditor" class="screen lab-screen">
+    <div class="scanlines"></div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
+        <button class="nav-btn" id="navAssetFromSprite">ASSET LAB</button>
+        <button class="nav-btn active">SPRITE EDITOR</button>
+        <button class="nav-btn disabled">MAP EDITOR</button>
+        <button class="nav-btn disabled">EVENTS</button>
+      </aside>
+
+      <section class="workspace">
+        <header class="workspace-header">
+          <div>
+            <h1>SPRITE EDITOR</h1>
+            <p id="spriteInfo">—</p>
+          </div>
+          <div class="header-buttons">
+            <button id="closeSprite"   class="secondary">← RETOUR</button>
+            <button id="savePngSprite" class="secondary">EXPORT PNG</button>
+            <button id="saveSprite"    class="primary">SAUVEGARDER</button>
+          </div>
+        </header>
+
+        <div class="sprite-grid">
+          <!-- Outils + couleur courante -->
+          <section class="sprite-tools">
+            <h2>Outils</h2>
+            <div class="tools-row">
+              <button class="tool-btn active" data-tool="pencil"     title="Crayon (B/P)">✏</button>
+              <button class="tool-btn"        data-tool="eraser"     title="Gomme (E)">⌫</button>
+              <button class="tool-btn"        data-tool="eyedropper" title="Pipette (I)">⌖</button>
+              <button class="tool-btn"        data-tool="fill"       title="Remplissage (G)">▣</button>
+            </div>
+
+            <h2>Transformes</h2>
+            <div class="tools-row">
+              <button class="tool-btn" data-tool="flipH"  title="Flip horizontal">⇄</button>
+              <button class="tool-btn" data-tool="flipV"  title="Flip vertical">⇅</button>
+              <button class="tool-btn" data-tool="resize" title="Redimensionner">⤢</button>
+              <button class="tool-btn" data-tool="clear"  title="Effacer tout">✕</button>
+            </div>
+
+            <h2>Vue</h2>
+            <div class="tools-row">
+              <button class="tool-btn" id="zoomOut"    title="Zoom -">-</button>
+              <button class="tool-btn" id="zoomIn"     title="Zoom +">+</button>
+              <button class="tool-btn" id="toggleGrid" title="Grille">#</button>
+            </div>
+
+            <h2>Historique</h2>
+            <div class="tools-row">
+              <button class="tool-btn" id="undoBtn" title="Annuler (Ctrl+Z)">↶</button>
+              <button class="tool-btn" id="redoBtn" title="Refaire (Ctrl+Y)">↷</button>
+            </div>
+
+            <h2>Couleur active</h2>
+            <div class="current-color-wrap">
+              <div id="currentColor" class="current-color"></div>
+            </div>
+
+            <h2>Aperçu réel</h2>
+            <div class="mini-preview-wrap">
+              <canvas id="spriteMini"></canvas>
+            </div>
+            <p class="hint">Taille native ST7735.</p>
+          </section>
+
+          <!-- Canvas central -->
+          <section class="sprite-canvas-area">
+            <div class="canvas-stack">
+              <canvas id="spriteCanvas"></canvas>
+              <canvas id="spriteOverlay"></canvas>
+            </div>
+          </section>
+
+          <!-- Palette -->
+          <section class="sprite-palette-panel">
+            <h2>Palette ST7735</h2>
+            <div id="spritePalette" class="palette-grid"></div>
+            <p class="hint">32 couleurs RGB565 pré-quantifiées (DB32). Survol = valeur hex.</p>
+          </section>
+        </div>
+      </section>
+    </div>
+  </section>
+
+</main>
+
+<script type="module" src="app.js"></script>
 </body>
 </html>

@@ -2,12 +2,14 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
+let currentProjectPath = null;
+
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 960,
-    minHeight: 640,
+    width: 1320,
+    height: 860,
+    minWidth: 1100,
+    minHeight: 720,
     title: "Luma Studio",
     backgroundColor: "#020617",
     webPreferences: {
@@ -40,6 +42,8 @@ function safeName(name) {
     .slice(0, 48) || "MonProjet";
 }
 
+/* ---------------------- PROJET ---------------------- */
+
 ipcMain.handle("project:create", async (_event, project) => {
   const result = await dialog.showOpenDialog({
     title: "Choisir le dossier où créer le projet Luma",
@@ -55,10 +59,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   const projectDir = path.join(baseDir, projectName);
 
   if (fs.existsSync(projectDir)) {
-    return {
-      ok: false,
-      error: "Un dossier avec ce nom existe déjà."
-    };
+    return { ok: false, error: "Un dossier avec ce nom existe déjà." };
   }
 
   const folders = [
@@ -66,20 +67,20 @@ ipcMain.handle("project:create", async (_event, project) => {
     "assets/sprites",
     "assets/tilesets",
     "assets/audio",
+    "assets/portraits",
     "maps",
     "dialogues",
     "scenes",
+    "objects",
     "build",
     "exports"
   ];
 
   fs.mkdirSync(projectDir, { recursive: true });
-  for (const folder of folders) {
-    fs.mkdirSync(path.join(projectDir, folder), { recursive: true });
-  }
+  for (const folder of folders) fs.mkdirSync(path.join(projectDir, folder), { recursive: true });
 
   const config = {
-    lumaStudioVersion: "0.1.0",
+    lumaStudioVersion: "0.3.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -88,23 +89,15 @@ ipcMain.handle("project:create", async (_event, project) => {
       screenWidth: 160,
       screenHeight: 128,
       tileSize: 16,
-      format: "LUMA"
-    },
-    limits: {
-      small_180ko: project.size === "180ko",
-      standard_550ko: project.size === "550ko",
-      large_2mo: project.size === "2mo"
+      colorFormat: "RGB565",
+      format: "LUMA",
+      driver: "ST7735"
     }
   };
 
-  fs.writeFileSync(
-    path.join(projectDir, "config.json"),
-    JSON.stringify(config, null, 2),
-    "utf8"
-  );
+  fs.writeFileSync(path.join(projectDir, "config.json"), JSON.stringify(config, null, 2), "utf8");
 
-  fs.writeFileSync(
-    path.join(projectDir, "game.luma"),
+  fs.writeFileSync(path.join(projectDir, "game.luma"),
 `# LUMA GAME FILE
 # Projet: ${project.name}
 # Editeur: ${project.editor}
@@ -113,33 +106,153 @@ ipcMain.handle("project:create", async (_event, project) => {
 GAME "${project.name}"
 EDITOR "${project.editor}"
 SCREEN 160 128
+COLOR_FORMAT RGB565
 TILESIZE 16
 START_SCENE "scene_001"
 `,
     "utf8"
   );
 
-  fs.writeFileSync(
-    path.join(projectDir, "README.txt"),
-`Projet Luma Studio
-=================
+  fs.writeFileSync(path.join(projectDir, "assets", "sprites", "frames.json"), JSON.stringify([], null, 2), "utf8");
 
-Nom du projet : ${project.name}
-Editeur       : ${project.editor}
-Taille cible  : ${project.size}
-
-Dossiers :
-- assets/sprites  : sprites et spritesheets
-- assets/tilesets : tilesets
-- assets/audio    : sons et musiques
-- maps            : maps en tiles
-- dialogues       : textes et dialogues
-- scenes          : scènes du jeu
-- build           : fichiers temporaires
-- exports         : fichiers .luma / .lpk exportés
-`,
-    "utf8"
-  );
-
+  currentProjectPath = projectDir;
   return { ok: true, path: projectDir };
+});
+
+ipcMain.handle("project:get-current", async () => {
+  return { ok: true, path: currentProjectPath };
+});
+
+/* ---------------------- ASSETS ---------------------- */
+
+ipcMain.handle("asset:import-image", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "Importer une image ou spritesheet",
+    properties: ["openFile"],
+    filters: [
+      { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }
+    ]
+  });
+
+  if (result.canceled || !result.filePaths.length) {
+    return { ok: false, canceled: true };
+  }
+
+  const filePath = result.filePaths[0];
+  const ext = path.extname(filePath).toLowerCase();
+  const name = path.basename(filePath);
+
+  let importedPath = null;
+  if (currentProjectPath) {
+    importedPath = path.join(currentProjectPath, "assets", "sprites", name);
+    fs.copyFileSync(filePath, importedPath);
+  }
+
+  const imageBuffer = fs.readFileSync(filePath);
+  const dataUrl = `data:image/${ext.replace(".", "").replace("jpg", "jpeg")};base64,${imageBuffer.toString("base64")}`;
+
+  return {
+    ok: true,
+    name,
+    originalPath: filePath,
+    projectPath: importedPath,
+    dataUrl,
+    isGif: ext === ".gif"
+  };
+});
+
+ipcMain.handle("asset:save-frames", async (_event, frames) => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+
+  const framesPath = path.join(currentProjectPath, "assets", "sprites", "frames.json");
+  fs.writeFileSync(framesPath, JSON.stringify(frames, null, 2), "utf8");
+
+  return { ok: true, path: framesPath };
+});
+
+/* Sauvegarde du PNG d'une frame éditée (export visuel pour le user) */
+ipcMain.handle("asset:save-frame-png", async (_event, { name, dataUrl }) => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+  const safe = safeName(name) + ".png";
+  const outPath = path.join(currentProjectPath, "assets", "sprites", safe);
+
+  const base64 = dataUrl.split(",")[1];
+  fs.writeFileSync(outPath, Buffer.from(base64, "base64"));
+
+  return { ok: true, path: outPath };
+});
+
+/* ---------------------- PIPELINE LPK ---------------------- */
+
+/**
+ * Reçoit un payload { frames: [{name, w, h, rgb565: number[]}] }
+ * Écrit un fichier .lpk binaire dans build/sprites.lpk
+ *
+ * Format LPK1 (préliminaire, V0.3) :
+ *   [0..3]   magic "LPK1"
+ *   [4..5]   version uint16 LE
+ *   [6..7]   count   uint16 LE (nombre de frames)
+ *   [8..]    table d'index, par frame :
+ *              name[16]  ASCII zéro-paddé
+ *              w  uint16 LE
+ *              h  uint16 LE
+ *              offset uint32 LE (depuis début pixel data)
+ *   puis pixel data : pour chaque frame, w*h * uint16 LE RGB565
+ */
+ipcMain.handle("pipeline:write-lpk", async (_event, payload) => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+
+  const frames = Array.isArray(payload && payload.frames) ? payload.frames : [];
+  if (!frames.length) return { ok: false, error: "Aucune frame à exporter." };
+
+  const HEADER_SIZE = 8;
+  const ENTRY_SIZE  = 16 /*name*/ + 2 + 2 + 4; /* = 24 octets par entrée */
+  const indexSize   = ENTRY_SIZE * frames.length;
+  let pixelSize     = 0;
+  for (const f of frames) pixelSize += f.w * f.h * 2;
+
+  const total = HEADER_SIZE + indexSize + pixelSize;
+  const buf = Buffer.alloc(total);
+
+  /* Header */
+  buf.write("LPK1", 0, "ascii");
+  buf.writeUInt16LE(1, 4);
+  buf.writeUInt16LE(frames.length, 6);
+
+  /* Table d'index */
+  let cursor = HEADER_SIZE;
+  let pixelOffset = 0;
+  for (const f of frames) {
+    const nameBuf = Buffer.alloc(16);
+    nameBuf.write(String(f.name || "frame").slice(0, 15), "ascii");
+    nameBuf.copy(buf, cursor);
+    buf.writeUInt16LE(f.w, cursor + 16);
+    buf.writeUInt16LE(f.h, cursor + 18);
+    buf.writeUInt32LE(pixelOffset, cursor + 20);
+    cursor += ENTRY_SIZE;
+    pixelOffset += f.w * f.h * 2;
+  }
+
+  /* Pixel data RGB565 LE */
+  let dataCursor = HEADER_SIZE + indexSize;
+  for (const f of frames) {
+    const px = f.rgb565 || [];
+    for (let i = 0; i < f.w * f.h; i++) {
+      buf.writeUInt16LE(px[i] || 0, dataCursor);
+      dataCursor += 2;
+    }
+  }
+
+  const buildDir = path.join(currentProjectPath, "build");
+  if (!fs.existsSync(buildDir)) fs.mkdirSync(buildDir, { recursive: true });
+  const outPath = path.join(buildDir, "sprites.lpk");
+  fs.writeFileSync(outPath, buf);
+
+  return { ok: true, path: outPath, bytes: total };
 });
