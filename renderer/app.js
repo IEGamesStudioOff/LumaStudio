@@ -1,16 +1,14 @@
 /**
  * Luma Studio - orchestrateur principal.
- *
- * Charge en modules : navigation, asset-lab, sprite-editor.
- * Gère uniquement :
- *  - le splash
- *  - le formulaire de création de projet
- *  - le passage Asset Lab <-> Sprite Editor
  */
 
 import { showScreen } from "./modules/navigation.js";
-import { initAssetLab, setProjectSize, commitFrameEdits } from "./modules/asset-lab.js";
+import {
+  initAssetLab, setProjectSize, commitFrameEdits,
+  getFrames, getSourceImage
+} from "./modules/asset-lab.js";
 import { initSpriteEditor, openSpriteEditor }            from "./modules/sprite-editor.js";
+import { initAnimationEditor, openAnimationEditor }      from "./modules/animation-editor.js";
 
 let selectedSize = "550ko";
 
@@ -67,27 +65,38 @@ document.getElementById("createProject").addEventListener("click", async () => {
   showScreen("assetLab");
 });
 
-/* ---------------------- ASSET LAB <-> SPRITE EDITOR ---------------------- */
+/* ---------------------- INIT ÉDITEURS ---------------------- */
 
 initAssetLab({
-  onOpenSpriteEditor: (frame, sourceImage) => {
-    openSpriteEditor(frame, sourceImage);
-  }
+  onOpenSpriteEditor: (frame, sourceImage) => openSpriteEditor(frame, sourceImage)
 });
 
 initSpriteEditor({
-  onCommit: (frameId, payload) => {
-    commitFrameEdits(frameId, payload);
-  }
+  onCommit: (frameId, payload) => commitFrameEdits(frameId, payload)
 });
 
-/* Bouton sidebar SPRITE EDITOR depuis Asset Lab */
+initAnimationEditor({
+  getFrames:      () => getFrames(),
+  getSourceImage: () => getSourceImage()
+});
+
+/* ---------------------- NAVIGATION SIDEBAR ---------------------- */
+
 document.getElementById("navSprite").addEventListener("click", (e) => {
   if (e.currentTarget.classList.contains("disabled")) return;
   document.getElementById("openSpriteEditor").click();
 });
 
-/* Bouton sidebar ASSET LAB depuis Sprite Editor */
+document.getElementById("navAnim").addEventListener("click", (e) => {
+  if (e.currentTarget.classList.contains("disabled")) return;
+  openAnimationEditor();
+});
+
+document.getElementById("openAnimationEditor").addEventListener("click", (e) => {
+  if (e.currentTarget.classList.contains("disabled")) return;
+  openAnimationEditor();
+});
+
 document.getElementById("navAssetFromSprite").addEventListener("click", () => {
   showScreen("assetLab");
 });

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v0.3</title>
+  <title>Luma Studio v0.4</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -57,6 +57,7 @@
         <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
         <button class="nav-btn active" id="navAsset">ASSET LAB</button>
         <button class="nav-btn disabled" id="navSprite">SPRITE EDITOR</button>
+        <button class="nav-btn disabled" id="navAnim">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
         <button class="nav-btn disabled">EVENTS</button>
         <div class="project-path" id="projectPath">Aucun projet</div>
@@ -69,9 +70,10 @@
             <p>Importer, découper, sélectionner et estimer la mémoire des sprites.</p>
           </div>
           <div class="header-buttons">
-            <button id="openSpriteEditor" class="secondary disabled" disabled>OUVRIR ÉDITEUR</button>
-            <button id="exportLpk"        class="secondary">EXPORT .LPK</button>
-            <button id="importImage"      class="primary">IMPORTER IMAGE / GIF</button>
+            <button id="openSpriteEditor"    class="secondary disabled" disabled>OUVRIR ÉDITEUR</button>
+            <button id="openAnimationEditor" class="secondary disabled" disabled>ANIMATIONS</button>
+            <button id="exportLpk"           class="secondary">EXPORT .LPK</button>
+            <button id="importImage"         class="primary">IMPORTER IMAGE / GIF</button>
           </div>
         </header>
 
@@ -175,6 +177,7 @@
         <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
         <button class="nav-btn" id="navAssetFromSprite">ASSET LAB</button>
         <button class="nav-btn active">SPRITE EDITOR</button>
+        <button class="nav-btn disabled">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
         <button class="nav-btn disabled">EVENTS</button>
       </aside>
@@ -250,6 +253,95 @@
             <div id="spritePalette" class="palette-grid"></div>
             <p class="hint">32 couleurs RGB565 pré-quantifiées (DB32). Survol = valeur hex.</p>
           </section>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ANIMATION EDITOR -->
+  <section id="animationEditor" class="screen lab-screen">
+    <div class="scanlines"></div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
+        <button class="nav-btn" id="navAssetFromAnim">ASSET LAB</button>
+        <button class="nav-btn disabled">SPRITE EDITOR</button>
+        <button class="nav-btn active">ANIMATIONS</button>
+        <button class="nav-btn disabled">MAP EDITOR</button>
+        <button class="nav-btn disabled">EVENTS</button>
+      </aside>
+
+      <section class="workspace">
+        <header class="workspace-header">
+          <div>
+            <h1>ANIMATION EDITOR</h1>
+            <p>Compose des animations à partir des frames. Drag &amp; drop, vitesse, loop, preview.</p>
+          </div>
+          <div class="header-buttons">
+            <button id="animClose" class="secondary">← RETOUR</button>
+            <button id="animNew"   class="secondary">+ NOUVELLE</button>
+            <button id="animSave"  class="primary">SAUVEGARDER</button>
+          </div>
+        </header>
+
+        <div class="anim-grid">
+
+          <!-- COLONNE 1 : Liste d'animations -->
+          <section class="anim-list-panel">
+            <h2>Animations</h2>
+            <div id="animList" class="anim-list"></div>
+            <p class="hint">
+              Mémoire totale : <strong id="animsTotalMem">0 o</strong>
+            </p>
+          </section>
+
+          <!-- COLONNE 2 : Édition + timeline + preview -->
+          <section class="anim-edit-panel">
+            <h2>Détails</h2>
+            <label>Nom</label>
+            <input id="animName" placeholder="player_walk_down" />
+
+            <div class="anim-controls">
+              <div>
+                <label>Vitesse : <span id="animSpeedValue">120 ms</span></label>
+                <input id="animSpeed" type="range" min="20" max="500" step="10" value="120" />
+              </div>
+              <div class="anim-loop-wrap">
+                <label class="checkbox-row">
+                  <input type="checkbox" id="animLoop" checked />
+                  <span>Loop on</span>
+                </label>
+                <button id="animDelete" class="danger">SUPPRIMER</button>
+              </div>
+            </div>
+
+            <h2 style="margin-top:14px">Timeline</h2>
+            <div id="animTimeline" class="anim-timeline"></div>
+            <p class="hint" id="animMemHint">
+              Mémoire animation : <strong id="animMem">0 o</strong>
+              · header 24 o + 2 o / frame référencée
+            </p>
+
+            <h2 style="margin-top:14px">Preview</h2>
+            <div class="anim-preview-wrap">
+              <canvas id="animPreview"></canvas>
+            </div>
+            <div class="anim-playback">
+              <button id="animPlay"  class="tool-btn">▶</button>
+              <button id="animPause" class="tool-btn">⏸</button>
+              <button id="animStop"  class="tool-btn">■</button>
+            </div>
+          </section>
+
+          <!-- COLONNE 3 : Pool de frames -->
+          <section class="anim-pool-panel">
+            <h2>Frames disponibles</h2>
+            <p class="hint" style="margin-bottom:10px">
+              Drag vers la timeline · double-clic = ajouter à la fin
+            </p>
+            <div id="animFramePool" class="anim-frame-pool"></div>
+          </section>
+
         </div>
       </section>
     </div>

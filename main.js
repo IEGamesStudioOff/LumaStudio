@@ -80,7 +80,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   for (const folder of folders) fs.mkdirSync(path.join(projectDir, folder), { recursive: true });
 
   const config = {
-    lumaStudioVersion: "0.3.0",
+    lumaStudioVersion: "0.4.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -114,6 +114,7 @@ START_SCENE "scene_001"
   );
 
   fs.writeFileSync(path.join(projectDir, "assets", "sprites", "frames.json"), JSON.stringify([], null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "assets", "sprites", "animations.json"), JSON.stringify([], null, 2), "utf8");
 
   currentProjectPath = projectDir;
   return { ok: true, path: projectDir };
@@ -170,6 +171,25 @@ ipcMain.handle("asset:save-frames", async (_event, frames) => {
   fs.writeFileSync(framesPath, JSON.stringify(frames, null, 2), "utf8");
 
   return { ok: true, path: framesPath };
+});
+
+ipcMain.handle("animation:save", async (_event, animations) => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+  const animsPath = path.join(currentProjectPath, "assets", "sprites", "animations.json");
+  fs.writeFileSync(animsPath, JSON.stringify(animations, null, 2), "utf8");
+  return { ok: true, path: animsPath };
+});
+
+ipcMain.handle("animation:load", async () => {
+  if (!currentProjectPath) {
+    return { ok: false, error: "Aucun projet actif." };
+  }
+  const animsPath = path.join(currentProjectPath, "assets", "sprites", "animations.json");
+  if (!fs.existsSync(animsPath)) return { ok: true, animations: [] };
+  const raw = fs.readFileSync(animsPath, "utf8");
+  return { ok: true, animations: JSON.parse(raw) };
 });
 
 /* Sauvegarde du PNG d'une frame éditée (export visuel pour le user) */

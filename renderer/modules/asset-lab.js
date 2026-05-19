@@ -10,7 +10,7 @@
 
 import { estimateFramesMemory, formatBytes, getProjectLimit } from "./memory.js";
 import { PALETTE_ST7735 } from "./palette.js";
-import { rgb565ToImageData, base64ToRgb565 } from "./rgb565.js";
+import { paintFrameNative, paintFrameZoomed, fitZoom } from "./frame-renderer.js";
 
 const state = {
   importedImage:    null,
@@ -173,21 +173,9 @@ function createFrameCard(frame) {
   framesGrid.appendChild(card);
 }
 
-/** Dessine la frame sur un canvas donné (au format natif w*h) en se basant
- *  sur la source originale OU sur le buffer RGB565 si éditée. */
+/** Dessine la frame sur un canvas (taille native). Délègue au module partagé. */
 function paintFrameOnCanvas(frame, canvas) {
-  canvas.width = frame.w;
-  canvas.height = frame.h;
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
-
-  if (frame.edited && frame.pixelsB64) {
-    const buf = base64ToRgb565(frame.pixelsB64);
-    const img = rgb565ToImageData(buf, frame.w, frame.h);
-    ctx.putImageData(img, 0, 0);
-  } else if (state.importedImage) {
-    ctx.drawImage(state.importedImage, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
-  }
+  paintFrameNative(frame, state.importedImage, canvas);
 }
 
 /* ---------------------- SÉLECTION + APERÇU ---------------------- */
@@ -332,6 +320,16 @@ export function getSelectedFrame() {
   return state.frames.find((f) => f.id === state.selectedFrameId) || null;
 }
 
+/** Donne accès aux frames pour les autres écrans (Animation Editor, etc.). */
+export function getFrames() {
+  return state.frames;
+}
+
+/** Donne accès à l'image source. Peut être null. */
+export function getSourceImage() {
+  return state.importedImage;
+}
+
 /** Appelé par le Sprite Editor quand il sauvegarde une frame. */
 export function commitFrameEdits(frameId, { pixelsB64, w, h }) {
   const f = state.frames.find((x) => x.id === frameId);
@@ -372,6 +370,16 @@ function refreshUI() {
   editBtn.classList.toggle("disabled", !hasSel);
   editBtn.disabled = !hasSel;
   document.getElementById("navSprite").classList.toggle("disabled", !hasSel);
+
+  /* Bouton Animations actif dès qu'on a des frames */
+  const hasFrames = state.frames.length > 0;
+  const navAnim = document.getElementById("navAnim");
+  if (navAnim) navAnim.classList.toggle("disabled", !hasFrames);
+  const openAnim = document.getElementById("openAnimationEditor");
+  if (openAnim) {
+    openAnim.classList.toggle("disabled", !hasFrames);
+    openAnim.disabled = !hasFrames;
+  }
 }
 
 function renderPaletteRow() {

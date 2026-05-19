@@ -1,4 +1,4 @@
-# Luma Studio v0.3
+# Luma Studio v0.4
 
 Éditeur rétro no-code pour la console **Luma** (cible matérielle : écran LCD ST7735, RGB565).
 Inspiration : NESmaker × Aseprite × Construct.
@@ -9,79 +9,123 @@ npm install
 npm start
 ```
 
-## Nouveautés v0.3
+## Nouveautés v0.4 — Animation Editor
 
-### Architecture modulaire (ES6)
-Le renderer est désormais découpé proprement, fini le mono-fichier.
+```
+frames  ───►  animations
+```
+
+Un nouvel écran complet pour composer des animations à partir des frames du projet.
+Aucun pixel n'est dupliqué : une animation = une liste ordonnée d'**indices** de frames + vitesse + loop.
+
+### Fonctionnalités
+- ✔ créer une animation (`anim_001`, renommable en `player_walk_down`...)
+- ✔ **drag & drop des frames** depuis le pool (panneau droite) vers la timeline
+- ✔ **réorganisation** par drag interne dans la timeline
+- ✔ vitesse animation : slider 20–500 ms (par défaut 120 ms)
+- ✔ loop on/off
+- ✔ preview **play / pause / stop**
+- ✔ clic sur un slot → frame visible dans la preview (utile en pause)
+- ✔ double-clic sur une frame du pool → ajout rapide en fin de timeline
+- ✔ badge `×N` sur les frames du pool indiquant combien de fois elles sont utilisées
+- ✔ suppression d'animation
+- ✔ export `animations.json`
+- ✔ estimation mémoire animation (header 24 o + 2 o / frame référencée)
+- ✔ estimation mémoire totale des animations
+
+### Format d'une animation
+```json
+{
+  "id": 0,
+  "name": "player_walk_down",
+  "frameIds": [0, 1, 2, 3],
+  "speedMs": 120,
+  "loop": true
+}
+```
+
+Stocké dans `<projet>/assets/sprites/animations.json`.
+
+### Modèle mémoire ciblé (futur format binaire)
+```
+animation entry (24 o) :
+  name[16]    ASCII
+  speedMs     uint16 LE
+  loop        uint8
+  count       uint16
+  reserved    3 octets
+puis : count × uint16 LE (indices vers frames)
+```
+
+## Architecture
 
 ```
 renderer/
-├── app.js                 # orchestrateur principal
+├── app.js                        # orchestrateur principal
 ├── index.html
 ├── style.css
 └── modules/
-    ├── navigation.js      # gestion des écrans
-    ├── palette.js         # palette ST7735 (32 couleurs DB32 quantifiées)
-    ├── rgb565.js          # conversions RGB888 ↔ RGB565
-    ├── memory.js          # estimation mémoire (pixels + headers)
-    ├── history.js         # pile undo/redo générique
-    ├── asset-lab.js       # logique Asset Lab étendue
-    └── sprite-editor.js   # éditeur pixel complet
+    ├── navigation.js             # gestion des écrans
+    ├── palette.js                # palette ST7735 (32 couleurs DB32)
+    ├── rgb565.js                 # conversions RGB888 ↔ RGB565
+    ├── memory.js                 # estimation mémoire (frames + animations)
+    ├── history.js                # undo/redo générique
+    ├── frame-renderer.js         # peinture d'une frame (source ou édité) ★ NEW
+    ├── asset-lab.js              # logique Asset Lab
+    ├── sprite-editor.js          # éditeur pixel
+    └── animation-editor.js       # éditeur d'animations ★ NEW
 ```
 
-### Asset Lab amélioré
-- ✔ sélection active d'une frame (clic carte, contour jaune)
-- ✔ preview agrandie pixel-perfect dans son panneau
-- ✔ grille de découpe sur la spritesheet
-- ✔ frame sélectionnée mise en évidence sur la source
-- ✔ double-clic → ouvre direct dans le Sprite Editor
-
-### Sprite Editor (nouveau)
-- ✔ canvas zoom + canvas overlay (grille / curseur)
-- ✔ aperçu réel taille native (ce que le ST7735 affichera)
-- ✔ palette ST7735 cliquable (32 couleurs)
-- ✔ outils : **crayon · gomme · pipette · remplissage**
-- ✔ transformes : **flip H/V · resize nearest-neighbor · clear**
-- ✔ **undo/redo** (Ctrl+Z / Ctrl+Y, 60 étapes)
-- ✔ tracé continu (Bresenham) pour ne pas perdre de pixels en mouvement rapide
-- ✔ sauvegarde → commit dans la frame d'origine (le pixel data devient autoritatif)
-- ✔ export PNG
-- ✔ raccourcis : `P/B` crayon · `E` gomme · `I` pipette · `G` remplissage
-
-### Pipeline Luma
-- ✔ buffer image : `Uint16Array` RGB565 (encodé base64 dans JSON)
-- ✔ conversion **vraie** RGB888 ↔ RGB565 avec bit-replication (couleur fidèle écran)
-- ✔ estimation mémoire réaliste : pixel data + headers LPK
-- ✔ **export .LPK** binaire dans `build/sprites.lpk` :
+## Flow utilisateur
 
 ```
-[0..3]   magic "LPK1"
-[4..5]   version uint16 LE
-[6..7]   count   uint16 LE
-[8..]    table d'index (24 o / frame) :
-           name[16]  ASCII
-           w uint16 LE
-           h uint16 LE
-           offset uint32 LE
-puis pixel data : w*h * uint16 LE RGB565
+splash
+   ↓
+project (taille, nom)
+   ↓
+ASSET LAB ────► importer / découper / sélectionner frames
+   │
+   ├──► SPRITE EDITOR (clic frame puis OUVRIR ÉDITEUR / double-clic)
+   │       crayon · gomme · pipette · remplissage
+   │       flip H/V · resize · undo/redo
+   │       palette ST7735 · sauvegarde commit
+   │
+   └──► ANIMATIONS (au moins 1 frame requise)
+           créer / nommer
+           drag des frames vers timeline
+           vitesse + loop
+           play/pause/stop
+           sauvegarde animations.json
 ```
+
+## Raccourcis
+
+### Sprite Editor
+| Raccourci          | Action       |
+|--------------------|--------------|
+| `P` ou `B`         | Crayon       |
+| `E`                | Gomme        |
+| `I`                | Pipette      |
+| `G`                | Remplissage  |
+| `Ctrl + Z`         | Undo         |
+| `Ctrl + Y` ou `Ctrl + Shift + Z` | Redo |
 
 ## Roadmap
 
-### v0.4
-- Animation Editor (timeline, vitesse, loop, ping-pong)
+### v0.5
 - Découpe GIF multi-frames automatique
 - Sélection rectangulaire dans le Sprite Editor
 - Copier/coller entre frames
-
-### v0.5
-- Map Editor (tilemap, layers, collisions)
+- Onion-skin dans le preview animation
 
 ### v0.6
-- Object Editor (entité = sprite + animations + propriétés + comportements)
+- Map Editor (tilemap, layers, collisions)
 
 ### v0.7
-- Events / scripting visuel type Construct (sans code)
+- Object Editor (entité = sprites + animations + propriétés + comportements)
+
+### v0.8
+- Events / scripting visuel type Construct
 
 ### v1.0
 - Build d'un binaire `.LUMA` exécutable sur la console Luma cible
