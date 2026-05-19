@@ -2,6 +2,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include <string.h>
 
 #include "luma_config.h"
 #include "luma_types.h"
@@ -93,6 +94,29 @@ void app_main(void) {
 
         if (luma_game_load(&runtime, &games[selected])) {
             luma_runtime_init(&runtime);
+
+            // V1.2 : précharger le premier sprite trouvé comme sprite joueur.
+            // C'est minimaliste mais ça démontre le rendu RGB565 fonctionnel.
+            // Une V1.3 permettra de mapper sprite ↔ objet via le studio.
+            runtime.player_sprite_loaded = false;
+            if (s_assets_open) {
+                for (int i = 0; i < s_assets.asset_count; i++) {
+                    if (strcmp(s_assets.assets[i].type, "sprite") == 0) {
+                        if (luma_lpk_read_sprite(&s_assets, s_assets.assets[i].name,
+                                                 &runtime.player_sprite_w,
+                                                 &runtime.player_sprite_h,
+                                                 runtime.player_sprite_pixels,
+                                                 LUMA_MAX_SPRITE_PIXELS)) {
+                            runtime.player_sprite_loaded = true;
+                            ESP_LOGI(TAG, "Player sprite: %s (%dx%d)",
+                                     s_assets.assets[i].name,
+                                     runtime.player_sprite_w,
+                                     runtime.player_sprite_h);
+                            break;
+                        }
+                    }
+                }
+            }
 
             while (runtime.running) {
                 luma_runtime_update(&runtime);

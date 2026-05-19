@@ -681,3 +681,77 @@ footer{padding:14px 32px 24px}#status{margin:0;color:var(--green)}.app-shell{dis
   font-size: 11px; color: var(--cyan); margin: 6px 0;
 }
 .anim-check input { width: 14px; height: 14px; }
+
+/* =============================================================================
+   V1.2 — LAYERS PANEL
+   ============================================================================= */
+
+.spe-layer-controls { margin-bottom: 4px; }
+.spe-layers-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #2141d6;
+  background: #000;
+  padding: 4px;
+  margin-bottom: 8px;
+}
+.spe-layer-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 60px 22px 22px 22px 22px;
+  gap: 2px;
+  align-items: center;
+  padding: 3px 4px;
+  border-bottom: 1px dotted #1a2aa7;
+  font-size: 10px;
+  cursor: pointer;
+}
+.spe-layer-row.active { background: #1a2aa7; }
+.spe-layer-row:hover { background: #070d28; }
+.spe-layer-row.active:hover { background: #2141d6; }
+.spe-layer-vis, .spe-layer-up, .spe-layer-dn, .spe-layer-merge, .spe-layer-del {
+  width: 22px; height: 22px;
+  border: 1px solid var(--blue);
+  background: #02061a;
+  color: var(--white);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.spe-layer-vis:hover, .spe-layer-up:hover, .spe-layer-dn:hover, .spe-layer-merge:hover {
+  background: var(--blue);
+}
+.spe-layer-del { border-color: var(--red); color: var(--red); }
+.spe-layer-del:hover { background: var(--red); color: var(--white); }
+.spe-layer-name {
+  color: var(--green);
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spe-layer-op {
+  width: 60px;
+  height: 14px;
+  margin: 0;
+}
+
+/* =============================================================================
+   V1.2 — EXPORT BUTTONS ANIMATION EDITOR
+   ============================================================================= */
+
+.anim-export-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 8px;
+}
+.anim-gif-btn {
+  padding: 8px;
+  border: 2px solid var(--yellow);
+  background: #1a1a00;
+  color: var(--yellow);
+  font-weight: bold;
+  cursor: pointer;
+}
+.anim-gif-btn:hover { background: var(--yellow); color: #000; }
+.anim-gif-btn:disabled { opacity: 0.4; cursor: not-allowed; }

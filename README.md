@@ -1,76 +1,83 @@
-# Luma Studio v1.1
+# Luma Studio v1.2
 
 Éditeur rétro Electron + base runtime ESP32 pour créer des jeux Luma.
 
-## Nouveautés V1.1
+## Nouveautés V1.2
 
-### Sprite Editor (réintégré et améliorée)
-Pixel-art editor pro orienté ST7735 RGB565. Accès via le bouton **✎ EDIT**
-sur chaque frame de l'Asset Lab. S'ouvre en overlay plein écran.
+### 🎨 Sprite Editor — Layers multi-pile
+Le sprite editor V1.1 gagne un système de layers complet façon Photoshop /
+Aseprite. Chaque frame peut contenir **N layers** superposés :
 
-**Outils** : crayon, gomme, pipette, flood fill, ligne, rectangle, ellipse,
-sélection rectangulaire avec déplacement / copier / coller.
+- **Add / Delete / Move up-down / Merge down** un layer.
+- **Visibility** togglable par layer (●/○).
+- **Opacité 0-100%** par layer (rendu en damier 50% pour les valeurs
+  intermédiaires, vu les contraintes 32 couleurs).
+- **Renommage** par double-clic sur le nom.
+- **Composition automatique** : le canvas affiche tous les layers visibles,
+  l'édition se fait sur le layer actif (highlight bleu).
+- **Pipette intelligente** : pique la couleur visible (de la composition),
+  pas celle du layer actif sous-jacent.
+- **Frame ops globales** : flip H/V, rotate 90°, resize → appliqués à tous
+  les layers en cohérence.
+- **Migration auto V1.1 → V1.2** : les frames avec `pixelsB64` deviennent
+  un seul layer "Base".
 
-**Pixel-perfect mode** sur le crayon : élimine automatiquement les coins en L
-sur les diagonales (signature Aseprite).
+Workflow typique : 1 layer outline + 1 layer fill + 1 layer shading.
+Les color ramps + onion skin V1.1 fonctionnent en plus des layers.
 
-**Brushes** 1×1 à 4×4. **Symétrie** H, V, ou quad (4 quadrants miroirs).
+### 📽 Export GIF animé
+Bouton **📽 GIF (×4)** et **📽 GIF (×1)** dans les settings de
+l'animation editor. Encoder GIF89a complet implémenté en JS pur :
 
-**Palette** : 32 couleurs DB32 quantifiées RGB565 + 4 color ramps navigables
-au clavier (↑/↓) pour shader rapidement + slot custom illimité avec color
-picker quantifié.
+- **Compression LZW** standard (codes de taille variable, LSB-first).
+- **Palette globale dynamique** (jusqu'à 255 couleurs uniques + index 0
+  pour la transparence).
+- **Durées per-frame** respectées (override par-slot inclus).
+- **Loop infini** (Netscape 2.0 extension).
+- **Upscale** ×1 ou ×4 (×1 = rendu console, ×4 = lisible pour réseaux).
+- **Centrage automatique** si les frames d'une anim n'ont pas toutes la
+  même taille.
 
-**Vue** : zoom molette pixel-perfect, pan Espace+drag, grille 8×8, pixel
-grid auto-affichée ≥6× zoom, **onion skin** (frame précédente en rouge,
-suivante en vert).
+Téléchargement direct via blob, nom de fichier = `<anim_name>.gif`
+ou `<anim_name>_x4.gif`. Validé avec PIL pour la conformité.
 
-**History** : undo/redo 100 étapes (Ctrl+Z / Ctrl+Y), liste cliquable pour
-sauter à n'importe quel état.
+### 🎮 Rendu sprite RGB565 sur ESP32 (le gros morceau)
+Le moteur console rend maintenant les **vrais sprites** dessinés dans le
+studio, plus seulement des rectangles colorés.
 
-**Frame ops** : flip H/V, rotate 90°, clear, resize nearest-neighbor.
+**Pipeline complet** :
 
-**Stats live** : couleurs uniques utilisées, octets RGB565, % de la limite
-projet — un dev console doit toujours voir où il en est.
+1. **Build studio** : lors de l'export `assets.lpk`, chaque frame avec
+   `pixelsB64` est compilée en fichier binaire
+   `sprites/<frame_id>.spr` au format :
+   `[2B w LE | 2B h LE | w*h*2 bytes pixels BE]`. L'endianness ST7735
+   (big-endian) est appliquée à l'encodage pour un blit direct.
+2. **ESP32 boot** : ouverture du LPK puis recherche du premier asset de
+   type `sprite`, chargement en RAM dans `runtime.player_sprite_pixels[]`
+   (max 64×64 = 8 Ko par sprite).
+3. **Runtime** : la collision joueur utilise la dimension du sprite ;
+   le rendu utilise `luma_render_blit_rgb565()` à la position joueur.
+4. **Rendu** : ligne par ligne, segments contigus opaques regroupés en
+   un seul appel SPI pour minimiser le bus, byte-swap LE→BE intégré.
 
-**Raccourcis** : P/E/I/G/L/R/O/S (outils), X (swap colors), [/] (brush size),
-↑/↓ (ramp navigation), Alt+←/→ (frame nav), Ctrl+C/V (copy/paste frame),
-Espace+drag (pan), ESC (fermer).
+Si aucun sprite n'est trouvé dans le LPK, fallback sur le rect jaune.
 
-### Animation Editor
-Accessible via la sidebar **ANIMATIONS**.
-
-**Timeline horizontale** drag/drop : depuis le pool de frames vers la
-timeline, ou réorganisation par drag entre slots. Double-clic sur une frame
-du pool pour l'ajouter à la fin.
-
-**Vitesse globale** (20-500ms) + **vitesse override par-frame** : pour
-qu'une frame "tenue" puisse rester affichée plus longtemps que les autres.
-
-**Loop modes** : forward (boucle), ping-pong (aller-retour), once
-(joue une fois et s'arrête).
-
-**Preview multi-zoom** : ×1 (rendu pixel-perfect), ×4, ×8 + **cadre console
-160×128** qui montre exactement comment la frame apparaîtra sur le hardware.
-
-**Stats** : nombre de slots, durée totale, fréquence de boucle.
-
-**Badge ×N** : indique combien de fois chaque frame du pool est utilisée
-à travers toutes les animations (références, pas duplication).
-
-### Autres
-- Fichier `assets/sprites/animations.json` créé automatiquement.
-- Le bouton SAUVEGARDER inclut maintenant les animations.
-- `game.luma` export inclut les frames (avec pixelsB64) et les animations.
+API C ajoutée :
+- `luma_lpk_read_sprite(lpk, name, *w, *h, pixels, max_pixels)` — décode
+  un sprite depuis le LPK avec byte-swap automatique.
+- `luma_render_blit_rgb565(x, y, w, h, pixels, transparent_color)` —
+  blit avec transparence par couleur (magenta 0xF81F par convention).
 
 ## Côté PC / Electron
 
 - V0.4 Project Manager
 - V0.5 Object & Event Database
-- **V1.1 Sprite Editor pixel-art + Animation Editor**
+- **V1.1 Sprite Editor pixel-art** + **V1.2 Layers**
+- **V1.1 Animation Editor** + **V1.2 Export GIF**
 - V0.6 Music Editor 8-bit
 - V1.0 Dialogues / Cutscenes
 - V1.0 Map / Scene Editor
-- V1.0 Build / Export Pipeline
+- V1.0 Build / Export Pipeline + **V1.2 LPK sprite-aware**
 
 Lancer l'éditeur :
 
@@ -81,22 +88,21 @@ npm start
 
 ## Moteur ESP32 — `luma_engine_esp32/`
 
-Identique à la V1.0.1, à savoir :
-
 - launcher `/sdcard/jeux/` + lecture `manifest.json`
 - chargement `game.luma` (couches floor/decor/collision en RAM)
-- collision réelle joueur ↔ tiles + clamp caméra sur les 4 bords
-- ouverture `.lpk` d'assets
-- audio piezo 2 canaux **non-bloquant**, 2 timers indépendants
+- collision joueur ↔ tiles + clamp caméra 4 bords
+- ouverture LPK + **lecture sprites RGB565** (V1.2)
+- **rendu sprite joueur depuis LPK** (V1.2)
+- audio piezo 2 canaux non-bloquant
 - save FAT-safe
 
-La consommation des animations par le runtime ESP32 sera ajoutée en V1.2
-(actuellement game.luma les contient déjà mais le moteur ne les rend pas).
+## Limitations connues V1.2
 
-## Limitations connues
-
-- Le rendu ESP32 utilise toujours une palette « tile ID → couleur » simple
-  pour les tiles ; le rendu de sprites RGB565 depuis frames.pixelsB64
-  arrive en V1.2.
-- Pas d'export GIF des animations (à voir si pertinent).
-- Pas de layers multi-pile (1 frame = 1 plan unique).
+- **Un seul sprite chargé en RAM** côté ESP32 (le premier trouvé devient
+  le sprite joueur). Le mapping `objet ↔ sprite ↔ animation` arrive en V1.3.
+- **Pas de cache disque LRU** : si on veut multiplier les sprites en RAM,
+  il faudra ajouter un système de slot ou streaming depuis le LPK.
+- Les opacités partielles dans le sprite editor sont affichées en damier
+  (32 couleurs limitées ne permettent pas un vrai alpha blend pertinent).
+- L'export GIF utilise une palette globale unique pour toutes les frames
+  de l'anim — au-delà de 255 couleurs uniques, troncation.

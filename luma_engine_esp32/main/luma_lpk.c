@@ -94,3 +94,45 @@ bool luma_lpk_read_asset(luma_lpk_t *pack, const char *name, uint8_t *buffer, ui
     if (out_size) *out_size = asset->size;
     return true;
 }
+
+// V1.2 : lit un sprite RGB565 compilé depuis le LPK.
+// Format de l'asset : 2B w (LE), 2B h (LE), w*h*2 bytes pixels (BE pour ST7735).
+// On reconvertit en uint16_t natif (l'endianness CPU = LE sur ESP32, donc on
+// swap le BE du fichier vers LE en RAM).
+bool luma_lpk_read_sprite(luma_lpk_t *pack, const char *name,
+                          uint16_t *out_w, uint16_t *out_h,
+                          uint16_t *pixels, uint32_t max_pixels) {
+    const luma_asset_entry_t *asset = luma_lpk_find(pack, name);
+    if (!asset || !pack->file) return false;
+    if (asset->size < 4) return false;
+
+    fseek(pack->file, pack->data_start + asset->offset, SEEK_SET);
+    uint8_t hdr[4];
+    if (fread(hdr, 1, 4, pack->file) != 4) return false;
+
+    uint16_t w = (uint16_t)hdr[0] | ((uint16_t)hdr[1] << 8);
+    uint16_t h = (uint16_t)hdr[2] | ((uint16_t)hdr[3] << 8);
+    uint32_t need = (uint32_t)w * (uint32_t)h;
+    if (need == 0 || need > max_pixels) return false;
+    if (asset->size < 4 + need * 2) return false;
+
+    // Lit les pixels en bloc et byte-swap BE → LE
+    uint8_t buf[64];
+    uint32_t read_pixels = 0;
+    while (read_pixels < need) {
+        uint32_t chunk = need - read_pixels;
+        if (chunk > sizeof(buf) / 2) chunk = sizeof(buf) / 2;
+        if (fread(buf, 1, chunk * 2, pack->file) != chunk * 2) return false;
+        for (uint32_t i = 0; i < chunk; i++) {
+            // fichier en BE : hi byte d'abord
+            uint16_t hi = buf[i * 2];
+            uint16_t lo = buf[i * 2 + 1];
+            pixels[read_pixels + i] = (hi << 8) | lo;
+        }
+        read_pixels += chunk;
+    }
+
+    if (out_w) *out_w = w;
+    if (out_h) *out_h = h;
+    return true;
+}

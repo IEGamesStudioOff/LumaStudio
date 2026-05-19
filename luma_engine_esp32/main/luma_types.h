@@ -62,6 +62,10 @@ typedef struct {
     uint8_t facing;
 } luma_player_t;
 
+// V1.2 : taille max d'un sprite joueur/objet en RAM
+#define LUMA_MAX_SPRITE_DIM   64
+#define LUMA_MAX_SPRITE_PIXELS (LUMA_MAX_SPRITE_DIM * LUMA_MAX_SPRITE_DIM)
+
 typedef struct {
     luma_game_entry_t entry;
     luma_scene_t active_scene;
@@ -80,4 +84,9 @@ typedef struct {
     bool running;
     bool dialogue_active;
     char dialogue_text[LUMA_MAX_DIALOGUE];
+    // V1.2 : sprite RGB565 du joueur (chargé depuis le LPK)
+    bool player_sprite_loaded;
+    uint16_t player_sprite_w;
+    uint16_t player_sprite_h;
+    uint16_t player_sprite_pixels[LUMA_MAX_SPRITE_PIXELS];
 } luma_runtime_t;

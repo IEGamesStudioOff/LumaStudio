@@ -122,6 +122,48 @@ void luma_render_text(int x, int y, const char *text, uint16_t color) {
     }
 }
 
+// V1.2 : blit un sprite RGB565 stocké en RAM avec transparence par couleur.
+// Pour éviter de pousser tout le sprite d'un coup (jusqu'à 64x64x2 = 8 Ko stack),
+// on dessine ligne par ligne avec un buffer fixe.
+// Le ST7735 attend du big-endian, on swap pendant la copie.
+void luma_render_blit_rgb565(int x, int y, int w, int h,
+                             const uint16_t *pixels, uint16_t transparent) {
+    if (!pixels || w <= 0 || h <= 0) return;
+
+    for (int row = 0; row < h; row++) {
+        int py = y + row;
+        if (py < 0 || py >= LUMA_LCD_HEIGHT) continue;
+
+        // On regroupe les segments contigus de pixels opaques pour minimiser
+        // le nombre d'appels SPI. Une ligne max = 160 pixels.
+        int col = 0;
+        while (col < w) {
+            // skip transparents
+            while (col < w && pixels[row * w + col] == transparent) col++;
+            if (col >= w) break;
+            int start = col;
+            while (col < w && pixels[row * w + col] != transparent) col++;
+            int segLen = col - start;
+
+            int px = x + start;
+            int segPx = segLen;
+            // clip horizontal
+            int srcStart = 0;
+            if (px < 0) { srcStart = -px; segPx += px; px = 0; }
+            if (px + segPx > LUMA_LCD_WIDTH) segPx = LUMA_LCD_WIDTH - px;
+            if (segPx <= 0) continue;
+
+            uint16_t line[160];
+            for (int i = 0; i < segPx; i++) {
+                uint16_t c = pixels[row * w + start + srcStart + i];
+                line[i] = (c >> 8) | (c << 8); // LE → BE pour ST7735
+            }
+            lcd_set_addr(px, py, px + segPx - 1, py);
+            lcd_data(line, segPx * 2);
+        }
+    }
+}
+
 // Bug #6 fix: palette simple par ID de tile (8 entrées) — alignée sur l'éditeur.
 static const uint16_t TILE_PALETTE[8] = {
     0x0000, // 0 = transparent / vide
@@ -184,8 +226,18 @@ void luma_render_runtime(luma_runtime_t *rt) {
         }
     }
 
-    // Player
-    luma_render_rect(rt->player.x - rt->camera_x, rt->player.y - rt->camera_y, 12, 12, LUMA_YELLOW);
+    // V1.2 : Player rendu avec sprite RGB565 si chargé depuis le LPK,
+    // sinon fallback sur le rect jaune.
+    int psx = rt->player.x - rt->camera_x;
+    int psy = rt->player.y - rt->camera_y;
+    if (rt->player_sprite_loaded && rt->player_sprite_w > 0 && rt->player_sprite_h > 0) {
+        luma_render_blit_rgb565(psx, psy,
+                                rt->player_sprite_w, rt->player_sprite_h,
+                                rt->player_sprite_pixels,
+                                0xF81F /* magenta = transparent */);
+    } else {
+        luma_render_rect(psx, psy, 12, 12, LUMA_YELLOW);
+    }
 
     // UI
     luma_render_rect(0, 0, 160, 12, LUMA_BLUE);

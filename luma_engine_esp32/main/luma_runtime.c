@@ -5,12 +5,24 @@
 #include "luma_save.h"
 #include <string.h>
 
-#define PLAYER_SIZE 12
+#define PLAYER_DEFAULT_SIZE 12
+
+static int player_size(luma_runtime_t *rt) {
+    if (rt->player_sprite_loaded && rt->player_sprite_w > 0) {
+        // utilise la plus petite dimension pour la hitbox carrée
+        int s = rt->player_sprite_w < rt->player_sprite_h ? rt->player_sprite_w : rt->player_sprite_h;
+        return s > 0 ? s : PLAYER_DEFAULT_SIZE;
+    }
+    return PLAYER_DEFAULT_SIZE;
+}
 
 void luma_runtime_init(luma_runtime_t *rt) {
     rt->camera_x = 0;
     rt->camera_y = 0;
     rt->running = true;
+    rt->player_sprite_loaded = false;
+    rt->player_sprite_w = 0;
+    rt->player_sprite_h = 0;
 }
 
 // Bug #5 fix: vraie détection de collision côté ESP32
@@ -23,7 +35,7 @@ static bool is_solid_tile(luma_runtime_t *rt, int tx, int ty) {
 
 static bool can_stand_at(luma_runtime_t *rt, int px, int py) {
     int t = rt->active_map.tile_size ? rt->active_map.tile_size : 16;
-    int s = PLAYER_SIZE;
+    int s = player_size(rt);
     if (px < 0 || py < 0) return false;
     int x0 = px / t;
     int y0 = py / t;

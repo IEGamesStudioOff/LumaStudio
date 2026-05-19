@@ -78,7 +78,12 @@
     frameIndex: -1,
     w: 16,
     h: 16,
-    pixels: null,         // Uint16Array(w*h) RGB565, TRANSPARENT pour vide
+    // V1.2 : layers multi-pile
+    // chaque layer = { id, name, visible, opacity (0..1), pixels (Uint16Array) }
+    // state.pixels (legacy) pointe sur le layer actif pour minimiser le diff
+    layers: [],
+    activeLayer: 0,
+    pixels: null,         // alias vers layers[activeLayer].pixels — composition reste séparée
 
     tool: "pencil",       // pencil|eraser|picker|fill|line|rect|ellipse|select
     brushSize: 1,
@@ -122,9 +127,58 @@
   let titleEl, sizeEl, statsColorsEl, statsBytesEl, statsPctEl;
   let paletteEl, customPaletteEl, rampsEl, primaryEl, secondaryEl;
   let toolsEl, brushSizeEl, mirrorEl, pixelPerfectEl, rectFillEl, ellipseFillEl;
-  let historyListEl, frameNavLabel;
+  let historyListEl, frameNavLabel, layersListEl;
 
   function $$(id) { return document.getElementById(id); }
+
+  // ---------------------------------------------------------------------------
+  // LAYERS HELPERS (V1.2)
+  // ---------------------------------------------------------------------------
+  function activeLayer() { return state.layers[state.activeLayer]; }
+
+  function syncPixelsAlias() {
+    // state.pixels reste un alias direct vers le buffer du layer actif
+    // afin que tout le code de drawing existant fonctionne sans changement.
+    const al = activeLayer();
+    state.pixels = al ? al.pixels : null;
+  }
+
+  function makeBlankLayer(name) {
+    const px = new Uint16Array(state.w * state.h);
+    px.fill(TRANSPARENT);
+    return {
+      id: "layer_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      name: name || "Layer",
+      visible: true,
+      opacity: 1.0,
+      pixels: px
+    };
+  }
+
+  // Composition : combine tous les layers visibles en un seul Uint16Array
+  function compositeAllLayers() {
+    const out = new Uint16Array(state.w * state.h);
+    out.fill(TRANSPARENT);
+    for (const layer of state.layers) {
+      if (!layer.visible || !layer.pixels) continue;
+      const px = layer.pixels;
+      // Opacité partielle = bias à 0.5 (sur 32 couleurs limitées, le blending
+      // exact n'a pas vraiment de sens — on affiche en damier si opacity < 1)
+      if (layer.opacity >= 0.99) {
+        for (let i = 0; i < px.length; i++) {
+          if (px[i] !== TRANSPARENT) out[i] = px[i];
+        }
+      } else if (layer.opacity > 0.01) {
+        // damier 50% pour suggérer la transparence
+        for (let i = 0; i < px.length; i++) {
+          if (px[i] === TRANSPARENT) continue;
+          const x = i % state.w, y = Math.floor(i / state.w);
+          if (((x + y) & 1) === 0) out[i] = px[i];
+        }
+      }
+    }
+    return out;
+  }
 
   // ---------------------------------------------------------------------------
   // FRAME I/O — décode/encode pixels Base64 ⇄ Uint16Array RGB565
@@ -151,14 +205,37 @@
     return arr;
   }
 
-  // Bootstrap d'une frame en chargeant pixelsB64 si présent, sinon en lisant
-  // les pixels de l'image source via canvas tampon.
-  function loadFramePixels(frame) {
+  // Bootstrap d'une frame :
+  //  - si frame.layers existe (V1.2) → on les décode
+  //  - sinon si frame.pixelsB64 existe (V1.1) → migration : 1 seul layer
+  //  - sinon → on lit depuis importedImage en 1 seul layer
+  function loadFrameLayers(frame) {
+    const len = frame.w * frame.h;
+    if (Array.isArray(frame.layers) && frame.layers.length > 0) {
+      // V1.2 format
+      return frame.layers.map((L, i) => ({
+        id: L.id || ("layer_" + i),
+        name: L.name || ("Layer " + (i + 1)),
+        visible: L.visible !== false,
+        opacity: typeof L.opacity === "number" ? L.opacity : 1.0,
+        pixels: L.pixelsB64 ? base64ToPixels(L.pixelsB64, len) : (() => { const p = new Uint16Array(len); p.fill(TRANSPARENT); return p; })()
+      }));
+    }
+    // Compat V1.1 : 1 layer généré depuis pixelsB64 ou importedImage
+    return [{
+      id: "layer_base",
+      name: "Base",
+      visible: true,
+      opacity: 1.0,
+      pixels: loadFramePixelsLegacy(frame)
+    }];
+  }
+
+  function loadFramePixelsLegacy(frame) {
     const len = frame.w * frame.h;
     if (frame.pixelsB64) {
       try { return base64ToPixels(frame.pixelsB64, len); } catch (e) {}
     }
-    // Fallback : on lit depuis importedImage (global défini dans app.js).
     const pixels = new Uint16Array(len);
     if (typeof importedImage !== "undefined" && importedImage) {
       const tmp = document.createElement("canvas");
@@ -170,11 +247,8 @@
       const data = tctx.getImageData(0, 0, frame.w, frame.h).data;
       for (let i = 0; i < len; i++) {
         const a = data[i * 4 + 3];
-        if (a < 128) {
-          pixels[i] = TRANSPARENT;
-        } else {
-          pixels[i] = rgb888To565(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
-        }
+        if (a < 128) pixels[i] = TRANSPARENT;
+        else pixels[i] = rgb888To565(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
       }
     } else {
       pixels.fill(TRANSPARENT);
@@ -182,15 +256,29 @@
     return pixels;
   }
 
+  // Alias public pour compat avec animation-editor.js qui lit pixelsB64
+  // (en V1.2 on garantit que frame.pixelsB64 reflète toujours la composition)
+  function loadFramePixels(frame) { return loadFramePixelsLegacy(frame); }
+
   function commitFramePixels() {
     if (state.frameIndex < 0) return;
     const f = frames[state.frameIndex];
     if (!f) return;
-    f.pixelsB64 = pixelsToBase64(state.pixels);
+    // Sérialise tous les layers
+    f.layers = state.layers.map(L => ({
+      id: L.id,
+      name: L.name,
+      visible: L.visible,
+      opacity: L.opacity,
+      pixelsB64: pixelsToBase64(L.pixels)
+    }));
+    f.activeLayer = state.activeLayer;
+    // Calcule la composition flat pour rétrocompat et performances de preview
+    const flat = compositeAllLayers();
+    f.pixelsB64 = pixelsToBase64(flat);
     f.w = state.w; f.h = state.h;
     f.rgb565Bytes = state.w * state.h * 2;
     f.editedAt = Date.now();
-    // Mettre à jour la frame card dans Asset Lab si possible.
     if (typeof updateMemory === "function") updateMemory();
     refreshAssetLabFrameCards();
   }
@@ -204,7 +292,11 @@
     }
     state.historyStack.push({
       label, w: state.w, h: state.h,
-      pixels: new Uint16Array(state.pixels)
+      activeLayer: state.activeLayer,
+      layers: state.layers.map(L => ({
+        id: L.id, name: L.name, visible: L.visible, opacity: L.opacity,
+        pixels: new Uint16Array(L.pixels)
+      }))
     });
     if (state.historyStack.length > state.historyLimit) {
       state.historyStack.shift();
@@ -213,26 +305,35 @@
     renderHistory();
   }
 
+  function restoreSnapshot(snap) {
+    state.w = snap.w; state.h = snap.h;
+    state.layers = snap.layers.map(L => ({
+      id: L.id, name: L.name, visible: L.visible, opacity: L.opacity,
+      pixels: new Uint16Array(L.pixels)
+    }));
+    state.activeLayer = Math.min(snap.activeLayer || 0, state.layers.length - 1);
+    if (state.activeLayer < 0) state.activeLayer = 0;
+    syncPixelsAlias();
+  }
+
   function undo() {
     if (state.historyIdx <= 0) return;
     state.historyIdx--;
-    const snap = state.historyStack[state.historyIdx];
-    state.w = snap.w; state.h = snap.h;
-    state.pixels = new Uint16Array(snap.pixels);
+    restoreSnapshot(state.historyStack[state.historyIdx]);
     fitView();
     render();
     renderHistory();
+    renderLayersPanel();
   }
 
   function redo() {
     if (state.historyIdx >= state.historyStack.length - 1) return;
     state.historyIdx++;
-    const snap = state.historyStack[state.historyIdx];
-    state.w = snap.w; state.h = snap.h;
-    state.pixels = new Uint16Array(snap.pixels);
+    restoreSnapshot(state.historyStack[state.historyIdx]);
     fitView();
     render();
     renderHistory();
+    renderLayersPanel();
   }
 
   function renderHistory() {
@@ -245,11 +346,10 @@
       div.textContent = (i + 1) + ". " + state.historyStack[i].label;
       div.onclick = () => {
         state.historyIdx = i;
-        const snap = state.historyStack[i];
-        state.w = snap.w; state.h = snap.h;
-        state.pixels = new Uint16Array(snap.pixels);
+        restoreSnapshot(state.historyStack[i]);
         render();
         renderHistory();
+        renderLayersPanel();
       };
       historyListEl.appendChild(div);
     }
@@ -393,34 +493,44 @@
   // FRAME OPS
   // ---------------------------------------------------------------------------
   function clearFrame() {
-    pushHistory("Clear");
+    pushHistory("Clear layer");
     state.pixels.fill(TRANSPARENT);
     commitFramePixels();
     render();
   }
 
+  function clearAllLayers() {
+    pushHistory("Clear all layers");
+    for (const L of state.layers) L.pixels.fill(TRANSPARENT);
+    commitFramePixels();
+    render();
+    renderLayersPanel();
+  }
+
   function flipH() {
     pushHistory("Flip H");
-    const next = new Uint16Array(state.pixels.length);
-    for (let y = 0; y < state.h; y++) {
-      for (let x = 0; x < state.w; x++) {
-        next[y * state.w + x] = state.pixels[y * state.w + (state.w - 1 - x)];
-      }
+    for (const L of state.layers) {
+      const next = new Uint16Array(L.pixels.length);
+      for (let y = 0; y < state.h; y++)
+        for (let x = 0; x < state.w; x++)
+          next[y * state.w + x] = L.pixels[y * state.w + (state.w - 1 - x)];
+      L.pixels = next;
     }
-    state.pixels = next;
+    syncPixelsAlias();
     commitFramePixels();
     render();
   }
 
   function flipV() {
     pushHistory("Flip V");
-    const next = new Uint16Array(state.pixels.length);
-    for (let y = 0; y < state.h; y++) {
-      for (let x = 0; x < state.w; x++) {
-        next[y * state.w + x] = state.pixels[(state.h - 1 - y) * state.w + x];
-      }
+    for (const L of state.layers) {
+      const next = new Uint16Array(L.pixels.length);
+      for (let y = 0; y < state.h; y++)
+        for (let x = 0; x < state.w; x++)
+          next[y * state.w + x] = L.pixels[(state.h - 1 - y) * state.w + x];
+      L.pixels = next;
     }
-    state.pixels = next;
+    syncPixelsAlias();
     commitFramePixels();
     render();
   }
@@ -428,14 +538,15 @@
   function rotate90() {
     pushHistory("Rotate 90°");
     const nw = state.h, nh = state.w;
-    const next = new Uint16Array(nw * nh);
-    for (let y = 0; y < state.h; y++) {
-      for (let x = 0; x < state.w; x++) {
-        next[x * nw + (nh - 1 - y)] = state.pixels[y * state.w + x];
-      }
+    for (const L of state.layers) {
+      const next = new Uint16Array(nw * nh);
+      for (let y = 0; y < state.h; y++)
+        for (let x = 0; x < state.w; x++)
+          next[x * nw + (nh - 1 - y)] = L.pixels[y * state.w + x];
+      L.pixels = next;
     }
-    state.pixels = next;
     state.w = nw; state.h = nh;
+    syncPixelsAlias();
     fitView();
     commitFramePixels();
     render();
@@ -443,18 +554,19 @@
 
   function resizeFrame(nw, nh) {
     pushHistory("Resize " + nw + "×" + nh);
-    const next = new Uint16Array(nw * nh);
-    next.fill(TRANSPARENT);
-    // nearest neighbor
-    for (let y = 0; y < nh; y++) {
-      for (let x = 0; x < nw; x++) {
-        const sx = Math.floor(x * state.w / nw);
-        const sy = Math.floor(y * state.h / nh);
-        next[y * nw + x] = state.pixels[sy * state.w + sx];
-      }
+    for (const L of state.layers) {
+      const next = new Uint16Array(nw * nh);
+      next.fill(TRANSPARENT);
+      for (let y = 0; y < nh; y++)
+        for (let x = 0; x < nw; x++) {
+          const sx = Math.floor(x * state.w / nw);
+          const sy = Math.floor(y * state.h / nh);
+          next[y * nw + x] = L.pixels[sy * state.w + sx];
+        }
+      L.pixels = next;
     }
     state.w = nw; state.h = nh;
-    state.pixels = next;
+    syncPixelsAlias();
     fitView();
     commitFramePixels();
     render();
@@ -511,12 +623,14 @@
     const z = state.zoom;
     const x0 = state.panX, y0 = state.panY;
 
+    // V1.2 : on rend la composition de tous les layers visibles
+    const composite = compositeAllLayers();
+
     // checkerboard
     if (state.showCheckerboard) {
-      const cs = Math.max(2, Math.floor(z / 2));
       for (let y = 0; y < state.h; y++) {
         for (let x = 0; x < state.w; x++) {
-          if (state.pixels[y * state.w + x] === TRANSPARENT) {
+          if (composite[y * state.w + x] === TRANSPARENT) {
             ctx.fillStyle = ((x + y) & 1) ? "#1a1f33" : "#0d1326";
             ctx.fillRect(x0 + x * z, y0 + y * z, z, z);
           }
@@ -527,7 +641,7 @@
     // pixels
     for (let y = 0; y < state.h; y++) {
       for (let x = 0; x < state.w; x++) {
-        const c = state.pixels[y * state.w + x];
+        const c = composite[y * state.w + x];
         if (c === TRANSPARENT) continue;
         ctx.fillStyle = rgb565ToHex(c);
         ctx.fillRect(x0 + x * z, y0 + y * z, z, z);
@@ -664,6 +778,7 @@
     const PW = prevCanvas.width, PH = prevCanvas.height;
     prevCtx.fillStyle = "#000";
     prevCtx.fillRect(0, 0, PW, PH);
+    const composite = compositeAllLayers();
     // 3 previews : 1×, 2×, 4× (taille console réelle)
     const pads = 6;
     const zooms = [1, 2, 4];
@@ -671,7 +786,7 @@
     for (const z of zooms) {
       for (let y = 0; y < state.h; y++) {
         for (let x = 0; x < state.w; x++) {
-          const c = state.pixels[y * state.w + x];
+          const c = composite[y * state.w + x];
           if (c === TRANSPARENT) continue;
           prevCtx.fillStyle = rgb565ToHex(c);
           prevCtx.fillRect(xOff + x * z, pads + y * z, z, z);
@@ -685,14 +800,15 @@
 
   function updateStats() {
     if (!statsColorsEl) return;
+    const composite = compositeAllLayers();
     const used = new Set();
-    for (let i = 0; i < state.pixels.length; i++) {
-      const c = state.pixels[i];
+    for (let i = 0; i < composite.length; i++) {
+      const c = composite[i];
       if (c !== TRANSPARENT) used.add(c);
     }
     statsColorsEl.textContent = used.size + " / 65536";
-    const bytes = state.w * state.h * 2;
-    statsBytesEl.textContent = bytes + " o (RGB565)";
+    const bytes = state.w * state.h * 2 * state.layers.length;
+    statsBytesEl.textContent = bytes + " o (" + state.layers.length + " layer" + (state.layers.length > 1 ? "s" : "") + ")";
     if (typeof projectLimitBytes !== "undefined") {
       const pct = Math.round((bytes / projectLimitBytes) * 100);
       statsPctEl.textContent = pct + "% du projet (1 frame)";
@@ -742,7 +858,9 @@
       setPixelMirrored(p.x, p.y, TRANSPARENT);
       render();
     } else if (state.tool === "picker") {
-      const c = getPixel(p.x, p.y);
+      // Pipette : prend la couleur visible (composition de tous les layers visibles)
+      const composite = compositeAllLayers();
+      const c = inBounds(p.x, p.y) ? composite[p.y * state.w + p.x] : TRANSPARENT;
       if (c !== undefined) {
         if (e.button === 2) state.secondary = c; else state.primary = c;
         updateColorIndicators();
@@ -827,9 +945,12 @@
       }
       render();
     } else if (state.tool === "line" || state.tool === "rect" || state.tool === "ellipse") {
-      // preview overlay : on rerender depuis l'undo le plus récent
+      // preview overlay : on restaure uniquement le layer actif depuis l'undo le plus récent
       const snap = state.historyStack[state.historyIdx];
-      if (snap) state.pixels = new Uint16Array(snap.pixels);
+      if (snap && snap.layers && snap.layers[state.activeLayer]) {
+        state.layers[state.activeLayer].pixels = new Uint16Array(snap.layers[state.activeLayer].pixels);
+        syncPixelsAlias();
+      }
       if (state.tool === "line") lineBresenham(state.drawStart.x, state.drawStart.y, p.x, p.y, color);
       else if (state.tool === "rect") rectStroke(state.drawStart.x, state.drawStart.y, p.x, p.y, color, state.rectFill);
       else if (state.tool === "ellipse") ellipseStroke(state.drawStart.x, state.drawStart.y, p.x, p.y, color, state.ellipseFill);
@@ -991,6 +1112,131 @@
   }
 
   // ---------------------------------------------------------------------------
+  // LAYERS OPS (V1.2)
+  // ---------------------------------------------------------------------------
+  function addLayer() {
+    pushHistory("Add layer");
+    state.layers.push(makeBlankLayer("Layer " + (state.layers.length + 1)));
+    state.activeLayer = state.layers.length - 1;
+    syncPixelsAlias();
+    commitFramePixels();
+    render();
+    renderLayersPanel();
+  }
+
+  function deleteLayer(idx) {
+    if (state.layers.length <= 1) {
+      alert("Impossible de supprimer le dernier layer.");
+      return;
+    }
+    pushHistory("Delete layer");
+    state.layers.splice(idx, 1);
+    state.activeLayer = Math.min(state.activeLayer, state.layers.length - 1);
+    syncPixelsAlias();
+    commitFramePixels();
+    render();
+    renderLayersPanel();
+  }
+
+  function moveLayer(idx, dir) {
+    const target = idx + dir;
+    if (target < 0 || target >= state.layers.length) return;
+    pushHistory("Move layer");
+    const tmp = state.layers[idx];
+    state.layers[idx] = state.layers[target];
+    state.layers[target] = tmp;
+    if (state.activeLayer === idx) state.activeLayer = target;
+    else if (state.activeLayer === target) state.activeLayer = idx;
+    syncPixelsAlias();
+    commitFramePixels();
+    render();
+    renderLayersPanel();
+  }
+
+  function mergeLayerDown(idx) {
+    if (idx <= 0) return;
+    pushHistory("Merge down");
+    const top = state.layers[idx];
+    const bot = state.layers[idx - 1];
+    for (let i = 0; i < top.pixels.length; i++) {
+      if (top.pixels[i] !== TRANSPARENT) bot.pixels[i] = top.pixels[i];
+    }
+    state.layers.splice(idx, 1);
+    state.activeLayer = idx - 1;
+    syncPixelsAlias();
+    commitFramePixels();
+    render();
+    renderLayersPanel();
+  }
+
+  function setActiveLayer(idx) {
+    if (idx < 0 || idx >= state.layers.length) return;
+    state.activeLayer = idx;
+    syncPixelsAlias();
+    render();
+    renderLayersPanel();
+  }
+
+  function toggleLayerVisibility(idx) {
+    state.layers[idx].visible = !state.layers[idx].visible;
+    commitFramePixels();
+    render();
+    renderLayersPanel();
+  }
+
+  function setLayerOpacity(idx, v) {
+    state.layers[idx].opacity = Math.max(0, Math.min(1, v));
+    commitFramePixels();
+    render();
+  }
+
+  function renameLayer(idx, name) {
+    state.layers[idx].name = name || ("Layer " + (idx + 1));
+    commitFramePixels();
+    renderLayersPanel();
+  }
+
+  function renderLayersPanel() {
+    if (!layersListEl) return;
+    layersListEl.innerHTML = "";
+    // affichage top-down (dernier layer = au-dessus, on l'affiche en haut)
+    for (let i = state.layers.length - 1; i >= 0; i--) {
+      const L = state.layers[i];
+      const row = document.createElement("div");
+      row.className = "spe-layer-row" + (i === state.activeLayer ? " active" : "");
+      row.innerHTML = `
+        <button class="spe-layer-vis" title="Visibilité">${L.visible ? "●" : "○"}</button>
+        <span class="spe-layer-name" title="Double-clic pour renommer">${L.name}</span>
+        <input class="spe-layer-op" type="range" min="0" max="100" value="${Math.round(L.opacity * 100)}" title="Opacité ${Math.round(L.opacity * 100)}%" />
+        <button class="spe-layer-up" title="Monter">▲</button>
+        <button class="spe-layer-dn" title="Descendre">▼</button>
+        <button class="spe-layer-merge" title="Fusionner vers le bas">⬇</button>
+        <button class="spe-layer-del" title="Supprimer">×</button>
+      `;
+      row.onclick = (e) => {
+        if (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT") return;
+        setActiveLayer(i);
+      };
+      row.querySelector(".spe-layer-vis").onclick = (e) => { e.stopPropagation(); toggleLayerVisibility(i); };
+      row.querySelector(".spe-layer-up").onclick = (e) => { e.stopPropagation(); moveLayer(i, 1); };
+      row.querySelector(".spe-layer-dn").onclick = (e) => { e.stopPropagation(); moveLayer(i, -1); };
+      row.querySelector(".spe-layer-merge").onclick = (e) => { e.stopPropagation(); mergeLayerDown(i); };
+      row.querySelector(".spe-layer-del").onclick = (e) => { e.stopPropagation();
+        if (confirm("Supprimer le layer « " + L.name + " » ?")) deleteLayer(i);
+      };
+      row.querySelector(".spe-layer-op").oninput = (e) => {
+        setLayerOpacity(i, Number(e.target.value) / 100);
+      };
+      row.querySelector(".spe-layer-name").ondblclick = (e) => {
+        e.stopPropagation();
+        const v = prompt("Nom du layer :", L.name);
+        if (v !== null) renameLayer(i, v);
+      };
+      layersListEl.appendChild(row);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // FRAME NAV
   // ---------------------------------------------------------------------------
   function openFrame(index) {
@@ -998,7 +1244,10 @@
     state.frameIndex = index;
     const f = frames[index];
     state.w = f.w; state.h = f.h;
-    state.pixels = loadFramePixels(f);
+    state.layers = loadFrameLayers(f);
+    state.activeLayer = Math.min(f.activeLayer || 0, state.layers.length - 1);
+    if (state.activeLayer < 0) state.activeLayer = 0;
+    syncPixelsAlias();
     state.historyStack = [];
     state.historyIdx = -1;
     pushHistory("Initial");
@@ -1006,6 +1255,7 @@
     state.selectionBuffer = null;
     fitView();
     render();
+    renderLayersPanel();
   }
 
   function prevFrame() { if (state.frameIndex > 0) openFrame(state.frameIndex - 1); }
@@ -1239,6 +1489,11 @@
           <div class="spe-ramps" id="speRamps"></div>
           <h3>Custom (RGB565)</h3>
           <div class="spe-palette" id="speCustomPalette"></div>
+          <h3>Layers</h3>
+          <div class="spe-layer-controls">
+            <button class="spe-btn" id="speAddLayer">+ Add layer</button>
+          </div>
+          <div class="spe-layers-list" id="speLayersList"></div>
           <h3>Historique</h3>
           <div class="spe-history" id="speHistory"></div>
         </aside>
@@ -1268,6 +1523,7 @@
     ellipseFillEl = $$("speEllipseFill");
     historyListEl = $$("speHistory");
     frameNavLabel = $$("speFrameNav");
+    layersListEl = $$("speLayersList");
 
     // size to viewport
     function fitCanvasSize() {
@@ -1320,6 +1576,7 @@
     $$("speCloseBtn").onclick = closeOverlay;
     $$("spePrev").onclick = prevFrame;
     $$("speNext").onclick = nextFrame;
+    $$("speAddLayer").onclick = addLayer;
 
     renderPalette();
     renderCustomPalette();

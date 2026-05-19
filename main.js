@@ -12,7 +12,7 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 720,
-    title: "Luma Studio v1.0",
+    title: "Luma Studio v1.2",
     backgroundColor: "#020617",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -102,7 +102,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   ensureProjectFolders(projectDir);
 
   const config = {
-    lumaStudioVersion: "1.1.0",
+    lumaStudioVersion: "1.2.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -386,6 +386,30 @@ function xorCryptBuffer(buffer, keyBuffer) {
   return out;
 }
 
+function buildSpriteFile(frame) {
+  // Format : 2B w (LE) | 2B h (LE) | w*h*2 bytes pixels (BE pour ST7735)
+  // Si pixelsB64 absent → on saute (caller filtre déjà).
+  if (!frame.pixelsB64) return null;
+  const raw = Buffer.from(frame.pixelsB64, "base64");
+  const w = frame.w | 0, h = frame.h | 0;
+  if (raw.length < w * h * 2) return null;
+
+  const header = Buffer.alloc(4);
+  header.writeUInt16LE(w, 0);
+  header.writeUInt16LE(h, 2);
+
+  // raw est en little-endian (Uint16Array JS). ST7735 attend big-endian.
+  const body = Buffer.alloc(w * h * 2);
+  for (let i = 0; i < w * h; i++) {
+    const lo = raw[i * 2];
+    const hi = raw[i * 2 + 1];
+    body[i * 2] = hi;     // high byte first
+    body[i * 2 + 1] = lo; // low byte second
+  }
+
+  return Buffer.concat([header, body]);
+}
+
 function makeLPK(projectDir, outputPath, secureKey = null) {
   const assetsDir = path.join(projectDir, "assets");
   const files = [];
@@ -396,7 +420,8 @@ function makeLPK(projectDir, outputPath, secureKey = null) {
       const full = path.join(dir, entry.name);
       const rel = path.join(prefix, entry.name).replace(/\\/g, "/");
       if (entry.isDirectory()) walk(full, rel);
-      else files.push({ full, rel, size: fs.statSync(full).size });
+      // n'embarque pas frames.json/animations.json (déjà dans game.luma)
+      else if (!rel.endsWith(".json")) files.push({ full, rel, size: fs.statSync(full).size });
     }
   }
 
@@ -411,6 +436,17 @@ function makeLPK(projectDir, outputPath, secureKey = null) {
     table.push({ name: f.rel, offset, size: data.length, type: path.extname(f.rel).replace(".", "") || "bin" });
     chunks.push(data);
     offset += data.length;
+  }
+
+  // V1.2 : ajoute les sprites compilés depuis frames.json (RGB565 BE pour ST7735)
+  const frames = readJsonSafe(path.join(projectDir, "assets", "sprites", "frames.json"), []);
+  for (const frame of frames) {
+    const spr = buildSpriteFile(frame);
+    if (!spr) continue;
+    const name = "sprites/" + (frame.id || frame.name || ("frame_" + table.length)) + ".spr";
+    table.push({ name, offset, size: spr.length, type: "sprite" });
+    chunks.push(spr);
+    offset += spr.length;
   }
 
   const header = Buffer.from(JSON.stringify({
@@ -566,7 +602,7 @@ ipcMain.handle("build:game-v09", async (_event, options) => {
   const manifest = {
     name: config.projectName || gameName,
     editor: config.editorName || "Unknown",
-    version: "1.1.0",
+    version: "1.2.0",
     type: "luma_game",
     entry: gameFile,
     assets: assetsFile,

@@ -270,6 +270,11 @@
       <h3>Actions</h3>
       <button class="anim-btn" id="animDuplicate">Dupliquer</button>
       <button class="anim-btn anim-danger" id="animDelete">Supprimer</button>
+      <h3>Export</h3>
+      <div class="anim-export-row">
+        <button class="anim-gif-btn" id="animExportGif">📽 GIF (×4)</button>
+        <button class="anim-gif-btn" id="animExportGif1">📽 GIF (×1)</button>
+      </div>
     `;
     $$("animName").oninput = () => { a.name = $$("animName").value; renderAnimList(); };
     $$("animSpeed").oninput = () => {
@@ -299,6 +304,114 @@
       stopPlay();
       renderAll();
     };
+    $$("animExportGif").onclick = () => exportGif(a, 4);
+    $$("animExportGif1").onclick = () => exportGif(a, 1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // EXPORT GIF (V1.2)
+  // ---------------------------------------------------------------------------
+  function exportGif(anim, scale) {
+    if (!window.LumaGifEncoder) {
+      alert("Encoder GIF indisponible.");
+      return;
+    }
+    if (!anim || !anim.slots || !anim.slots.length) {
+      alert("Animation vide.");
+      return;
+    }
+    scale = scale || 1;
+
+    // 1) collecter toutes les frames référencées + leurs pixels (composition flat)
+    const slotFrames = anim.slots.map(s => findFrameById(s.frameId)).filter(Boolean);
+    if (!slotFrames.length) { alert("Aucune frame valide."); return; }
+
+    // Dimensions communes = max w/h (frames pas forcément même taille)
+    let maxW = 0, maxH = 0;
+    for (const f of slotFrames) { maxW = Math.max(maxW, f.w); maxH = Math.max(maxH, f.h); }
+    const gifW = maxW * scale;
+    const gifH = maxH * scale;
+
+    // 2) collecter toutes les couleurs uniques (compositions) → palette
+    const allPixels = [];
+    for (const f of slotFrames) {
+      const px = f.pixelsB64 ? window.LumaSpriteEditor.base64ToPixels(f.pixelsB64, f.w * f.h) : null;
+      allPixels.push({ f, px });
+    }
+
+    // Set des couleurs RGB565 utilisées (sans TRANSPARENT)
+    const colorSet = new Set();
+    for (const { px } of allPixels) {
+      if (!px) continue;
+      for (let i = 0; i < px.length; i++) {
+        if (px[i] !== TRANSPARENT) colorSet.add(px[i]);
+      }
+    }
+    // On garde l'index 0 pour la couleur de fond / transparent.
+    // Palette : [transparent placeholder, ...autres couleurs]
+    let colorList = Array.from(colorSet).slice(0, 255);
+    if (colorList.length > 255) {
+      alert("Plus de 255 couleurs uniques dans l'anim — l'export GIF va perdre des détails.");
+      colorList = colorList.slice(0, 255);
+    }
+    // Build palette : index 0 = magenta visible (transparent), 1+ = couleurs réelles
+    const palette = [[255, 0, 255]];
+    for (const c565 of colorList) {
+      const r5 = (c565 >> 11) & 0x1F, g6 = (c565 >> 5) & 0x3F, b5 = c565 & 0x1F;
+      palette.push([
+        (r5 << 3) | (r5 >> 2),
+        (g6 << 2) | (g6 >> 4),
+        (b5 << 3) | (b5 >> 2)
+      ]);
+    }
+    const colorToIndex = new Map();
+    colorList.forEach((c, i) => colorToIndex.set(c, i + 1));
+
+    // 3) encoder
+    const enc = new window.LumaGifEncoder(gifW, gifH);
+    enc.setPalette(palette);
+
+    for (let s = 0; s < anim.slots.length; s++) {
+      const slot = anim.slots[s];
+      const item = allPixels[s];
+      if (!item) continue;
+      const f = item.f;
+      const px = item.px;
+      const indices = new Uint8Array(gifW * gifH);
+      indices.fill(0); // transparent partout au départ
+      if (px) {
+        // centrer la frame si plus petite que la taille max
+        const offX = Math.floor((maxW - f.w) / 2);
+        const offY = Math.floor((maxH - f.h) / 2);
+        for (let y = 0; y < f.h; y++) {
+          for (let x = 0; x < f.w; x++) {
+            const c = px[y * f.w + x];
+            if (c === TRANSPARENT) continue;
+            const palIdx = colorToIndex.get(c) || 0;
+            // upscale par scale
+            for (let dy = 0; dy < scale; dy++) {
+              for (let dx = 0; dx < scale; dx++) {
+                const gx = (offX + x) * scale + dx;
+                const gy = (offY + y) * scale + dy;
+                indices[gy * gifW + gx] = palIdx;
+              }
+            }
+          }
+        }
+      }
+      const dur = slot.durationMs ?? anim.speedMs;
+      enc.addFrame(indices, dur, 0); // index 0 = transparent
+    }
+
+    const bytes = enc.finish();
+    const blob = new Blob([bytes], { type: "image/gif" });
+    const url = URL.createObjectURL(blob);
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = (anim.name || anim.id) + (scale > 1 ? ("_x" + scale) : "") + ".gif";
+    document.body.appendChild(a2);
+    a2.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a2.remove(); }, 200);
   }
 
   function nextAnimId() {
