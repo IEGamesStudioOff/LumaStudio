@@ -12,7 +12,7 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 720,
-    title: "Luma Studio v0.7",
+    title: "Luma Studio v1.0",
     backgroundColor: "#020617",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

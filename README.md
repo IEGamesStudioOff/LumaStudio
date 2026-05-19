@@ -8,9 +8,9 @@ Luma Studio conserve les fonctions :
 - V0.4 Project Manager
 - V0.5 Object & Event Database
 - V0.6 Music Editor 8-bit
-- V0.7 Dialogues / Cutscenes
-- V0.8 Map / Scene Editor
-- V0.9 Build / Export Pipeline
+- V1.0 Dialogues / Cutscenes
+- V1.0 Map / Scene Editor
+- V1.0 Build / Export Pipeline
 
 Lancer l’éditeur :
 
@@ -38,4 +38,4 @@ Première base ESP-IDF du moteur console :
 
 Cette V1.0 est une base moteur. Elle est volontairement simple et doit être testée/adaptée sur ton hardware réel.
 
-Le support sécurisé `.enc` généré en V0.9 est préparé côté Studio, mais le déchiffrement console complet sera ajouté dans une prochaine version.
+Le support sécurisé `.enc` généré en V1.0 est préparé côté Studio, mais le déchiffrement console complet sera ajouté dans une prochaine version.

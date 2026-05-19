@@ -281,7 +281,7 @@ function noteFreq(note, octave) {
   return 440 * Math.pow(2, (semis[note] + (octave - 4) * 12) / 12);
 }
 
-// V0.7 Narrative
+// V1.0 Narrative
 $("importPortrait").addEventListener("click", async () => {
   const result = await window.lumaAPI.importPortrait();
   if (result.canceled) return;
@@ -370,7 +370,7 @@ function renderAll() { renderObjects(); renderEvents(); renderMusic(); renderDia
 
 
 
-// V0.8 MAP / SCENE EDITOR
+// V1.0 MAP / SCENE EDITOR
 const mapCanvas = $("mapCanvas");
 const mapCtx = mapCanvas.getContext("2d");
 const lumaPreviewCanvas = $("lumaPreviewCanvas");
@@ -711,7 +711,7 @@ function renderSceneMemory() {
 
 
 
-// V0.9 BUILD / EXPORT PIPELINE
+// V1.0 BUILD / EXPORT PIPELINE
 const buildStepsText = [
   "Analyse projet...",
   "Conversion sprites RGB565...",
