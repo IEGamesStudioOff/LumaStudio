@@ -1,51 +1,41 @@
-# Luma Studio v0.9
+# Luma Studio v1.0
 
-Éditeur rétro Electron pour créer des jeux Luma.
+Éditeur rétro Electron + première base de runtime ESP32 pour créer des jeux Luma.
 
-## Lancer
+## Côté PC / Electron
+
+Luma Studio conserve les fonctions :
+- V0.4 Project Manager
+- V0.5 Object & Event Database
+- V0.6 Music Editor 8-bit
+- V0.7 Dialogues / Cutscenes
+- V0.8 Map / Scene Editor
+- V0.9 Build / Export Pipeline
+
+Lancer l’éditeur :
 
 ```bash
 npm install
 npm start
 ```
 
-## Nouveautés V0.9
+## Nouveau en V1.0 : `luma_engine_esp32/`
 
-### Build / Export Pipeline
+Première base ESP-IDF du moteur console :
 
-- Bouton `BUILD GAME`
-- Animation rétro : vieux PC + disquette
-- Coche verte de validation en cas de succès
-- Analyse projet : erreurs / warnings
-- Génération :
-  - `game.luma`
-  - `assets.lpk`
-  - `manifest.json`
-  - `save_template.dat`
-- Export SD-ready dans :
-  - `exports/builds/NomDuJeu/`
+- launcher `/sdcard/jeux/`
+- lecture `manifest.json`
+- lecture `game.luma`
+- début de loader `.lpk`
+- runtime scène
+- input buttons
+- rendu ST7735
+- audio piezo 2 canaux
+- sauvegarde simple `/sdcard/sauvegardes/`
+- squelette pour dialogues/events/cutscenes
 
-### Option SD
+## Important
 
-- Recherche des lecteurs disponibles
-- Copie automatique vers :
-  - `/jeux/NomDuJeu/`
+Cette V1.0 est une base moteur. Elle est volontairement simple et doit être testée/adaptée sur ton hardware réel.
 
-### Option Export sécurisé
-
-- `game.luma.enc`
-- `assets.lpk.enc`
-- signature dans `manifest.json`
-- clé développeur générée dans :
-  - `exports/secure/*_dev_key.txt`
-
-Important : le chiffrement V0.9 est une protection anti-dump simple. Le lecteur sécurisé côté console sera fait plus tard.
-
-## Versions incluses
-
-- V0.4 Project Manager
-- V0.5 Object & Event Database
-- V0.6 Music Editor 8-bit
-- V0.7 Dialogues / Cutscenes
-- V0.8 Map / Scene Editor
-- V0.9 Build Compiler
+Le support sécurisé `.enc` généré en V0.9 est préparé côté Studio, mais le déchiffrement console complet sera ajouté dans une prochaine version.
