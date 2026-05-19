@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Luma Studio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <section id="splash" class="screen active">
+      <div class="scanlines"></div>
+      <div class="stars"></div>
+
+      <div class="retro-panel splash-box">
+        <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
+        <p class="subtitle">LUMA.LAOSENGINE2.0</p>
+        <p class="loading">CHARGEMENT<span id="dots">...</span></p>
+      </div>
+    </section>
+
+    <section id="project" class="screen">
+      <div class="scanlines"></div>
+      <div class="stars"></div>
+
+      <div class="retro-panel project-box">
+        <div class="titlebar">
+          <span>NOUVEAU PROJET</span>
+          <button class="close-btn" aria-label="Fermer">×</button>
+        </div>
+
+        <div class="project-content">
+          <div class="form-side">
+            <label for="projectName">Nom du projet</label>
+            <input id="projectName" value="MonProjet" maxlength="32" />
+
+            <label for="editorName">Nom de l’éditeur</label>
+            <input id="editorName" value="I.E.Games_Studio" maxlength="32" />
+          </div>
+
+          <div class="separator"></div>
+
+          <div class="size-side">
+            <label>Taille du jeu</label>
+
+            <button class="size-option" data-size="180ko">
+              <span class="disk">▣</span>
+              <strong>180 Ko</strong>
+              <em>Petit prototype</em>
+            </button>
+
+            <button class="size-option selected" data-size="550ko">
+              <span class="cursor">▶</span>
+              <span class="disk">▣</span>
+              <strong>550 Ko</strong>
+              <em>Standard rétro</em>
+            </button>
+
+            <button class="size-option" data-size="2mo">
+              <span class="disk">▣</span>
+              <strong>2 Mo</strong>
+              <em>Grand jeu</em>
+            </button>
+          </div>
+        </div>
+
+        <footer>
+          <p id="status">Prêt à créer un projet Luma.</p>
+          <button id="createProject">CRÉER LE PROJET</button>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

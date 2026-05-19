@@ -1,0 +1,12 @@
+{
+  "name": "luma-studio",
+  "version": "0.1.0",
+  "description": "Luma Studio - \u00e9diteur r\u00e9tro pour cr\u00e9er des jeux Luma",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}
