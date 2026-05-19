@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld("lumaAPI", {
   saveLogic: (data) => ipcRenderer.invoke("logic:save-v05", data),
   saveMusic: (music) => ipcRenderer.invoke("music:save", music),
   saveNarrative: (data) => ipcRenderer.invoke("narrative:save", data),
-  saveSceneData: (data) => ipcRenderer.invoke("scene:save-v08", data)
+  saveSceneData: (data) => ipcRenderer.invoke("scene:save-v08", data),
+  scanDrives: () => ipcRenderer.invoke("build:scan-drives"),
+  buildGame: (options) => ipcRenderer.invoke("build:game-v09", options)
 });

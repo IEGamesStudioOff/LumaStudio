@@ -64,6 +64,7 @@
           <button class="nav-btn" data-panel="musicPanel">MUSIC 8-BIT</button>
           <button class="nav-btn" data-panel="narrativePanel">DIALOGUES / CUTSCENES</button>
           <button class="nav-btn" data-panel="scenePanel">MAP / SCENE EDITOR</button>
+          <button class="nav-btn" data-panel="buildPanel">BUILD / EXPORT</button>
           <div class="project-path" id="projectPath">Aucun projet</div>
         </aside>
 
@@ -331,6 +332,80 @@
                 <p class="small-text">
                   V0.8 exporte maps.json, scenes.json, scene_preview.luma et un premier .lmapbin simple.
                 </p>
+              </section>
+            </div>
+          </section>
+
+
+          <section id="buildPanel" class="panel">
+            <div class="help-box">
+              <strong>V0.9 :</strong> Build Game. Analyse le projet, génère game.luma + assets.lpk, crée le manifest, option export sécurisé et copie SD.
+            </div>
+
+            <div class="build-layout">
+              <section class="tool-panel">
+                <h2>Build Settings</h2>
+
+                <label>Mode export</label>
+                <select id="buildMode">
+                  <option value="normal">Export normal</option>
+                  <option value="secure">Export sécurisé anti-dump simple</option>
+                </select>
+
+                <label>Copie carte SD</label>
+                <select id="sdDriveSelect">
+                  <option value="">Aucun lecteur sélectionné</option>
+                </select>
+
+                <button id="scanDrives" class="secondary full">RECHERCHER LECTEURS / SD</button>
+                <button id="buildGame" class="primary full">BUILD GAME</button>
+
+                <div class="memory-card">
+                  <p><span>game.luma</span><strong id="buildGameSize">-</strong></p>
+                  <p><span>assets.lpk</span><strong id="buildAssetSize">-</strong></p>
+                  <p><span>Total</span><strong id="buildTotalSize">-</strong></p>
+                  <p><span>Secure</span><strong id="buildSecureState">OFF</strong></p>
+                </div>
+
+                <p class="small-text">
+                  Le chiffrement V0.9 est une première protection contre le dump facile.
+                  Le lecteur sécurisé côté console sera ajouté plus tard.
+                </p>
+              </section>
+
+              <section class="build-center">
+                <h2>Export Animation</h2>
+
+                <div class="retro-computer">
+                  <div class="crt">
+                    <div id="buildCheck" class="build-check">✓</div>
+                    <div id="crtText">READY</div>
+                  </div>
+                  <div class="pc-body">
+                    <div class="drive-slot"></div>
+                    <div id="floppy" class="floppy">
+                      <div class="floppy-label">LUMA</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="build-progress">
+                  <div id="buildProgressBar"></div>
+                </div>
+
+                <div id="buildSteps" class="data-list build-steps"></div>
+              </section>
+
+              <section class="tool-panel">
+                <h2>Analyse projet</h2>
+                <div id="buildValidation" class="data-list build-validation">
+                  <div class="data-item">Clique sur BUILD GAME pour analyser le projet.</div>
+                </div>
+
+                <h2>Sortie</h2>
+                <div id="buildOutput" class="data-list build-output">
+                  <div class="data-item">Aucun export pour le moment.</div>
+                </div>
               </section>
             </div>
           </section>

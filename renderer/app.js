@@ -708,3 +708,163 @@ function renderSceneMemory() {
   $("sceneTriggersMem").textContent = formatBytes(triggerBytes);
   $("sceneTotalMem").textContent = formatBytes(total);
 }
+
+
+
+// V0.9 BUILD / EXPORT PIPELINE
+const buildStepsText = [
+  "Analyse projet...",
+  "Conversion sprites RGB565...",
+  "Création assets.lpk...",
+  "Création game.luma...",
+  "Génération manifest.json...",
+  "Préparation export SD...",
+  "Validation finale..."
+];
+
+$("scanDrives").addEventListener("click", async () => {
+  const result = await window.lumaAPI.scanDrives();
+  if (!result.ok) return alert("Impossible de scanner les lecteurs.");
+
+  const select = $("sdDriveSelect");
+  select.innerHTML = `<option value="">Aucun lecteur sélectionné</option>`;
+
+  result.drives.forEach((drive) => {
+    const option = document.createElement("option");
+    option.value = drive.path;
+    option.textContent = `${drive.label || drive.path}${drive.hasJeuxFolder ? " — dossier /jeux détecté" : ""}`;
+    select.appendChild(option);
+  });
+
+  if (!result.drives.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Aucun lecteur détecté";
+    select.appendChild(option);
+  }
+});
+
+$("buildMode").addEventListener("change", () => {
+  $("buildSecureState").textContent = $("buildMode").value === "secure" ? "ON" : "OFF";
+});
+
+$("buildGame").addEventListener("click", async () => {
+  resetBuildUI();
+
+  const secureExport = $("buildMode").value === "secure";
+  const drivePath = $("sdDriveSelect").value;
+  const copyToDrive = !!drivePath;
+
+  $("buildSecureState").textContent = secureExport ? "ON" : "OFF";
+  $("crtText").textContent = "BUILD";
+  $("floppy").classList.add("insert");
+
+  for (let i = 0; i < buildStepsText.length; i++) {
+    await wait(280);
+    addBuildStep(buildStepsText[i], "ok");
+    $("buildProgressBar").style.width = `${Math.round(((i + 1) / buildStepsText.length) * 80)}%`;
+  }
+
+  const result = await window.lumaAPI.buildGame({
+    secureExport,
+    drivePath,
+    copyToDrive,
+    forceBuild: true
+  });
+
+  if (!result.ok) {
+    $("crtText").textContent = "ERROR";
+    $("buildProgressBar").style.width = "100%";
+    addBuildStep(result.error || "Build failed", "err");
+    renderValidation(result.validation || { errors: ["Erreur inconnue"], warnings: [] });
+    return;
+  }
+
+  await wait(350);
+  $("buildProgressBar").style.width = "100%";
+  $("crtText").textContent = "SUCCESS";
+  $("buildCheck").classList.add("show");
+
+  renderValidation(result.validation);
+  renderBuildOutput(result);
+
+  $("buildGameSize").textContent = formatBytes(result.manifest.stats.game.size || 0);
+  $("buildAssetSize").textContent = formatBytes(result.manifest.stats.assets.size || 0);
+  $("buildTotalSize").textContent = formatBytes(result.manifest.size || 0);
+});
+
+function resetBuildUI() {
+  $("buildSteps").innerHTML = "";
+  $("buildValidation").innerHTML = "";
+  $("buildOutput").innerHTML = "";
+  $("buildProgressBar").style.width = "0%";
+  $("buildCheck").classList.remove("show");
+  $("floppy").classList.remove("insert");
+  $("crtText").textContent = "READY";
+}
+
+function addBuildStep(text, type = "") {
+  const div = document.createElement("div");
+  div.className = `data-item ${type}`;
+  div.textContent = text;
+  $("buildSteps").appendChild(div);
+  $("buildSteps").scrollTop = $("buildSteps").scrollHeight;
+}
+
+function renderValidation(validation) {
+  const box = $("buildValidation");
+  box.innerHTML = "";
+
+  if (!validation) {
+    box.innerHTML = `<div class="data-item warn">Aucune analyse disponible.</div>`;
+    return;
+  }
+
+  if (!validation.errors?.length && !validation.warnings?.length) {
+    box.innerHTML = `<div class="data-item ok">OK : aucun problème détecté.</div>`;
+    return;
+  }
+
+  for (const error of validation.errors || []) {
+    const div = document.createElement("div");
+    div.className = "data-item err";
+    div.textContent = `ERREUR : ${error}`;
+    box.appendChild(div);
+  }
+
+  for (const warning of validation.warnings || []) {
+    const div = document.createElement("div");
+    div.className = "data-item warn";
+    div.textContent = `WARNING : ${warning}`;
+    box.appendChild(div);
+  }
+}
+
+function renderBuildOutput(result) {
+  const box = $("buildOutput");
+  box.innerHTML = "";
+
+  const lines = [
+    ["Build folder", result.buildDir],
+    ["SD copy", result.sdCopyPath || "Non copié sur SD"],
+    ["Entry", result.manifest.entry],
+    ["Assets", result.manifest.assets],
+    ["Secure", result.manifest.secure ? "Oui" : "Non"],
+    ["Signature", result.manifest.signature],
+  ];
+
+  if (result.secureKeySaved) {
+    lines.push(["Dev key", result.secureKeySaved]);
+  }
+
+  for (const [k, v] of lines) {
+    const div = document.createElement("div");
+    div.className = "data-item";
+    div.innerHTML = `<strong>${k}</strong><br>${String(v)}`;
+    box.appendChild(div);
+  }
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
