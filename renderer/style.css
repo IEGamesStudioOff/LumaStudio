@@ -1052,3 +1052,104 @@ h2 {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ---------------------- MUSIC EDITOR V0.6 ---------------------- */
+.music-layout {
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  gap: 18px;
+}
+
+.music-side,
+.music-main {
+  min-height: 520px;
+}
+
+.music-actions {
+  margin: 14px 0;
+}
+
+.music-table-wrap {
+  max-height: 610px;
+  overflow: auto;
+  border: 2px solid #2141d6;
+  background: #000;
+}
+
+.music-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--white);
+  font-size: 13px;
+}
+
+.music-table th,
+.music-table td {
+  border: 1px solid #2141d6;
+  padding: 6px;
+  text-align: center;
+}
+
+.music-table th {
+  position: sticky;
+  top: 0;
+  background: #071342;
+  color: var(--cyan);
+  z-index: 1;
+}
+
+.music-table select {
+  min-width: 72px;
+  padding: 6px;
+  border-width: 2px;
+  font-size: 12px;
+}
+
+.music-table .step-cell {
+  color: var(--green);
+  font-weight: bold;
+}
+
+.music-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  padding: 10px;
+  border: 2px solid #2141d6;
+  background: #000;
+  cursor: pointer;
+}
+
+.music-item.active {
+  background: #203ee0;
+}
+
+.music-item strong {
+  color: var(--white);
+}
+
+.music-item span {
+  color: var(--green);
+  font-size: 12px;
+}
+
+.music-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--green);
+  font-size: 13px;
+}
+
+#musicMemBar {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+}
+
+@media (max-width: 1200px) {
+  .music-layout {
+    grid-template-columns: 1fr;
+  }
+}

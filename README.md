@@ -112,7 +112,7 @@ ASSET LAB ────► importer / découper / sélectionner frames
 
 ## Roadmap
 
-### v0.5
+### v0.6
 - Découpe GIF multi-frames automatique
 - Sélection rectangulaire dans le Sprite Editor
 - Copier/coller entre frames
@@ -131,7 +131,7 @@ ASSET LAB ────► importer / découper / sélectionner frames
 - Build d'un binaire `.LUMA` exécutable sur la console Luma cible
 
 
-## V0.5 — Object / Event Database
+## V0.6 — Object / Event Database
 
 - Base de données d'objets (`objects/objects.json`)
 - Base de données d'events IF / THEN (`events/events.json`)
@@ -141,3 +141,21 @@ ASSET LAB ────► importer / découper / sélectionner frames
 - Export lisible `build/logic_preview.luma`
 
 Cette version pose le cerveau logique du moteur Luma avant le Map Editor.
+
+
+## V0.6 - Music Editor 8-bit
+
+Ajouts :
+
+- Music Editor pour deux piezo buzzers
+- 2 pistes audio : Buzzer A / Buzzer B
+- Notes : REST, C, D, E, F, G, A, B
+- Octaves 2 à 6
+- Durées 1 / 2 / 4 / 8
+- Tempo BPM
+- Lecture PC avec oscillateurs carrés WebAudio
+- Sauvegarde `music/music.json`
+- Export lisible `build/music_preview.lmus`
+- Export binaire préliminaire `build/music.lmusbin`
+
+Le principe reste léger : pas de MP3/WAV, seulement des commandes de notes.

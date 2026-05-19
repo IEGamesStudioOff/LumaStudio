@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v0.5</title>
+  <title>Luma Studio v0.6</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -60,6 +60,7 @@
         <button class="nav-btn disabled" id="navAnim">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
         <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
+        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
         <div class="project-path" id="projectPath">Aucun projet</div>
       </aside>
 
@@ -73,6 +74,7 @@
             <button id="openSpriteEditor"    class="secondary disabled" disabled>OUVRIR ÉDITEUR</button>
             <button id="openAnimationEditor" class="secondary disabled" disabled>ANIMATIONS</button>
             <button id="openObjectEventDb" class="secondary">OBJECTS / EVENTS</button>
+            <button class="secondary" data-open-music>MUSIC</button>
             <button id="exportLpk"           class="secondary">EXPORT .LPK</button>
             <button id="importImage"         class="primary">IMPORTER IMAGE / GIF</button>
           </div>
@@ -181,6 +183,7 @@
         <button class="nav-btn disabled">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
         <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
+        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
       </aside>
 
       <section class="workspace">
@@ -270,6 +273,7 @@
         <button class="nav-btn active">ANIMATIONS</button>
         <button class="nav-btn disabled">MAP EDITOR</button>
         <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
+        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
       </aside>
 
       <section class="workspace">
@@ -359,6 +363,7 @@
         <button class="nav-btn disabled">SPRITE EDITOR</button>
         <button class="nav-btn disabled">ANIMATIONS</button>
         <button class="nav-btn active">OBJECTS / EVENTS</button>
+        <button class="nav-btn" data-open-music>MUSIC EDITOR</button>
         <div class="project-path" id="dbProjectPath">Base logique V0.5</div>
       </aside>
 
@@ -578,6 +583,113 @@
       </section>
     </div>
   </section>
+
+
+<!-- MUSIC EDITOR V0.6 -->
+<section id="musicEditor" class="screen lab-screen">
+  <div class="scanlines"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
+      <button class="nav-btn" id="musicBackAsset">ASSET LAB</button>
+      <button class="nav-btn" data-open-db>OBJECTS / EVENTS</button>
+      <button class="nav-btn active">MUSIC EDITOR</button>
+      <div class="project-path">Audio V0.6 · 2 piezo buzzers</div>
+    </aside>
+
+    <section class="workspace">
+      <header class="workspace-header">
+        <div>
+          <h1>MUSIC EDITOR 8-BIT</h1>
+          <p>Compose des musiques très légères pour deux piezo buzzers : piste A + piste B.</p>
+        </div>
+        <div class="header-buttons">
+          <button id="musicBack" class="secondary">← RETOUR</button>
+          <button id="musicNew" class="secondary">+ MORCEAU</button>
+          <button id="musicLoad" class="secondary">CHARGER</button>
+          <button id="musicSave" class="primary">SAUVEGARDER</button>
+          <button id="musicExport" class="secondary">EXPORT .LMUS</button>
+        </div>
+      </header>
+
+      <div class="help-box">
+        <strong>V0.6 :</strong>
+        pas de MP3 ni WAV lourd. La musique est une suite de petites commandes : note, octave, durée, silence.
+        Le moteur Luma pourra lire ces données comme une partition ultra légère.
+      </div>
+
+      <div class="music-layout">
+        <section class="music-side db-list-panel">
+          <div class="db-panel-title">
+            <h2>Morceaux</h2>
+            <button id="musicDelete" class="danger small">SUPPRIMER</button>
+          </div>
+          <div id="musicList" class="db-list compact"></div>
+
+          <h2 style="margin-top:18px">Paramètres</h2>
+          <label>Nom du morceau</label>
+          <input id="songName" value="theme_001" />
+
+          <div class="two-cols">
+            <div>
+              <label>Tempo BPM</label>
+              <input id="songTempo" type="number" min="40" max="240" value="120" />
+            </div>
+            <div>
+              <label>Steps</label>
+              <select id="songSteps">
+                <option value="16">16</option>
+                <option value="32" selected>32</option>
+                <option value="64">64</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="music-actions">
+            <button id="musicApply" class="primary full">APPLIQUER</button>
+            <button id="musicPlay" class="secondary full">▶ PLAY</button>
+            <button id="musicStop" class="secondary full">■ STOP</button>
+          </div>
+
+          <h2>Mémoire</h2>
+          <div class="memory-card">
+            <p><span>Morceaux :</span><strong id="musicCount">0</strong></p>
+            <p><span>Notes/steps :</span><strong id="musicStepsInfo">0</strong></p>
+            <p><span>LMUS estimé :</span><strong id="musicBytes">0 o</strong></p>
+            <div class="bar"><div id="musicMemBar"></div></div>
+            <p id="musicWarn">Très léger : parfait pour piezo.</p>
+          </div>
+        </section>
+
+        <section class="music-main db-edit-panel">
+          <div class="db-panel-title">
+            <h2>Partition</h2>
+            <div class="music-legend">
+              <span>Buzzer A = mélodie</span>
+              <span>Buzzer B = basse / effet</span>
+            </div>
+          </div>
+          <div class="music-table-wrap">
+            <table class="music-table">
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Buzzer A</th>
+                  <th>Oct A</th>
+                  <th>Dur A</th>
+                  <th>Buzzer B</th>
+                  <th>Oct B</th>
+                  <th>Dur B</th>
+                </tr>
+              </thead>
+              <tbody id="musicGrid"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
+</section>
 
 
 </main>

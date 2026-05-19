@@ -1,7 +1,7 @@
 {
   "name": "luma-studio",
-  "version": "0.5.0",
-  "description": "Luma Studio - éditeur rétro no-code pour la console Luma (Asset Lab, Sprite Editor, Animations, Object/Event DB)",
+  "version": "0.6.0",
+  "description": "Luma Studio - éditeur rétro pour créer des jeux Luma avec Music Editor 8-bit",
   "main": "main.js",
   "scripts": {
     "start": "electron ."

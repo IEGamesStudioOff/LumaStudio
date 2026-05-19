@@ -11,5 +11,8 @@ contextBridge.exposeInMainWorld("lumaAPI", {
   loadAnimations:    () => ipcRenderer.invoke("animation:load"),
   loadDatabase:      () => ipcRenderer.invoke("database:load"),
   saveDatabase:      (payload) => ipcRenderer.invoke("database:save", payload),
-  exportLogicLuma:   (payload) => ipcRenderer.invoke("database:export-luma", payload)
+  exportLogicLuma:   (payload) => ipcRenderer.invoke("database:export-luma", payload),
+  loadMusic:        () => ipcRenderer.invoke("music:load"),
+  saveMusic:        (songs) => ipcRenderer.invoke("music:save", songs),
+  exportMusic:      (songs) => ipcRenderer.invoke("music:export", songs)
 });

@@ -10,6 +10,7 @@ import {
 import { initSpriteEditor, openSpriteEditor }            from "./modules/sprite-editor.js";
 import { initAnimationEditor, openAnimationEditor }      from "./modules/animation-editor.js";
 import { initObjectEventDb, openObjectEventDb }          from "./modules/object-event-db.js";
+import { initMusicEditor, openMusicEditor }              from "./modules/music-editor.js";
 
 let selectedSize = "550ko";
 
@@ -82,6 +83,7 @@ initAnimationEditor({
 });
 
 initObjectEventDb();
+initMusicEditor();
 
 /* ---------------------- NAVIGATION SIDEBAR ---------------------- */
 
@@ -112,4 +114,11 @@ if (openDbButton) openDbButton.addEventListener("click", openObjectEventDb);
 
 document.querySelectorAll("[data-open-db]").forEach((btn) => {
   btn.addEventListener("click", openObjectEventDb);
+});
+
+
+/* ---------------------- MUSIC EDITOR V0.6 ---------------------- */
+
+document.querySelectorAll("[data-open-music]").forEach((btn) => {
+  btn.addEventListener("click", openMusicEditor);
 });

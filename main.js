@@ -10,7 +10,7 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 720,
-    title: "Luma Studio",
+    title: "Luma Studio v0.6",
     backgroundColor: "#020617",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -74,6 +74,7 @@ ipcMain.handle("project:create", async (_event, project) => {
     "objects",
     "events",
     "variables",
+    "music",
     "build",
     "exports"
   ];
@@ -82,7 +83,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   for (const folder of folders) fs.mkdirSync(path.join(projectDir, folder), { recursive: true });
 
   const config = {
-    lumaStudioVersion: "0.5.0",
+    lumaStudioVersion: "0.6.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -120,6 +121,7 @@ START_SCENE "scene_001"
   fs.writeFileSync(path.join(projectDir, "objects", "objects.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "events", "events.json"), JSON.stringify([], null, 2), "utf8");
   fs.writeFileSync(path.join(projectDir, "variables", "variables.json"), JSON.stringify({ global: [], scene: [], object: [] }, null, 2), "utf8");
+  fs.writeFileSync(path.join(projectDir, "music", "music.json"), JSON.stringify([], null, 2), "utf8");
 
   currentProjectPath = projectDir;
   return { ok: true, path: projectDir };
@@ -297,6 +299,90 @@ ipcMain.handle("database:export-luma", async (_event, payload) => {
 
   fs.writeFileSync(outPath, text, "utf8");
   return { ok: true, path: outPath };
+});
+
+
+/* ---------------------- MUSIC EDITOR V0.6 ---------------------- */
+
+ipcMain.handle("music:load", async () => {
+  if (!currentProjectPath) return { ok: false, error: "Aucun projet actif." };
+  const musicPath = ensureProjectFile("music/music.json", []);
+  if (!musicPath) return { ok: false, error: "Aucun projet actif." };
+  try {
+    const raw = fs.readFileSync(musicPath, "utf8");
+    return { ok: true, songs: JSON.parse(raw || "[]") };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle("music:save", async (_event, songs) => {
+  if (!currentProjectPath) return { ok: false, error: "Aucun projet actif." };
+  const musicPath = ensureProjectFile("music/music.json", []);
+  fs.writeFileSync(musicPath, JSON.stringify(Array.isArray(songs) ? songs : [], null, 2), "utf8");
+  return { ok: true, path: musicPath };
+});
+
+ipcMain.handle("music:export", async (_event, songs) => {
+  if (!currentProjectPath) return { ok: false, error: "Aucun projet actif." };
+  const buildDir = path.join(currentProjectPath, "build");
+  if (!fs.existsSync(buildDir)) fs.mkdirSync(buildDir, { recursive: true });
+
+  const list = Array.isArray(songs) ? songs : [];
+
+  // Export texte lisible : parfait pour vérifier avant le vrai binaire Luma.
+  let text = "# LUMA MUSIC PREVIEW - V0.6\n";
+  text += "# 2 pistes: BUZZER_A / BUZZER_B. REST = silence.\n\n";
+
+  for (const song of list) {
+    text += `SONG ${song.id} \"${song.name}\" TEMPO ${song.tempo} STEPS ${song.steps}\n`;
+    for (const trackName of ["A", "B"]) {
+      text += `  TRACK_${trackName}\n`;
+      const track = (song.tracks && song.tracks[trackName]) || [];
+      for (let i = 0; i < track.length; i++) {
+        const n = track[i] || { note: "REST", octave: 4, duration: 1 };
+        text += `    STEP ${String(i).padStart(2, "0")} ${n.note}${n.note === "REST" ? "" : n.octave} DUR ${n.duration}\n`;
+      }
+    }
+    text += "\n";
+  }
+
+  const txtPath = path.join(buildDir, "music_preview.lmus");
+  fs.writeFileSync(txtPath, text, "utf8");
+
+  // Export binaire préliminaire LMU1 : compact, facile à relire côté ESP32 plus tard.
+  // Header: LMU1, version uint16, songCount uint16
+  // Song: name[16], tempo uint16, steps uint16, puis 2 tracks * steps * 4 bytes
+  // Note code: REST=0, C=1,D=2,E=3,F=4,G=5,A=6,B=7 ; octave ; duration ; effect
+  const NOTE = { REST: 0, C: 1, D: 2, E: 3, F: 4, G: 5, A: 6, B: 7 };
+  let total = 8;
+  for (const song of list) total += 16 + 2 + 2 + (2 * (song.steps || 32) * 4);
+  const buf = Buffer.alloc(total);
+  buf.write("LMU1", 0, "ascii");
+  buf.writeUInt16LE(1, 4);
+  buf.writeUInt16LE(list.length, 6);
+  let cur = 8;
+  for (const song of list) {
+    const nameBuf = Buffer.alloc(16);
+    nameBuf.write(String(song.name || "song").slice(0, 15), "ascii");
+    nameBuf.copy(buf, cur); cur += 16;
+    buf.writeUInt16LE(Number(song.tempo || 120), cur); cur += 2;
+    buf.writeUInt16LE(Number(song.steps || 32), cur); cur += 2;
+    for (const trackName of ["A", "B"]) {
+      const track = (song.tracks && song.tracks[trackName]) || [];
+      for (let i = 0; i < Number(song.steps || 32); i++) {
+        const n = track[i] || { note: "REST", octave: 4, duration: 1, effect: 0 };
+        buf.writeUInt8(NOTE[n.note] ?? 0, cur++);
+        buf.writeUInt8(Number(n.octave || 4), cur++);
+        buf.writeUInt8(Number(n.duration || 1), cur++);
+        buf.writeUInt8(Number(n.effect || 0), cur++);
+      }
+    }
+  }
+  const binPath = path.join(buildDir, "music.lmusbin");
+  fs.writeFileSync(binPath, buf);
+
+  return { ok: true, textPath: txtPath, binaryPath: binPath, bytes: total };
 });
 
 
