@@ -12,7 +12,7 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 720,
-    title: "Luma Studio v1.4",
+    title: "Luma Studio v1.5",
     backgroundColor: "#020617",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -102,7 +102,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   ensureProjectFolders(projectDir);
 
   const config = {
-    lumaStudioVersion: "1.4.0",
+    lumaStudioVersion: "1.5.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -628,7 +628,7 @@ ipcMain.handle("build:game-v09", async (_event, options) => {
   const manifest = {
     name: config.projectName || gameName,
     editor: config.editorName || "Unknown",
-    version: "1.4.0",
+    version: "1.5.0",
     type: "luma_game",
     entry: gameFile,
     assets: assetsFile,

@@ -4,392 +4,291 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.4</title>
+  <title>Luma Studio v1.5</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main>
-    <section id="splash" class="screen active center">
-      <div class="scanlines"></div>
-      <div class="stars"></div>
-      <div class="retro-panel splash-box">
-        <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
-        <p class="subtitle">LUMA STUDIO v1.4</p>
-        <p class="loading">NARRATIVE ENGINE<span id="dots">...</span></p>
+  <main id="app">
+
+    <!-- ========================================================== SPLASH -->
+    <section id="splash" class="screen active splash-screen">
+      <div class="splash-card">
+        <img src="../assets/logo.png" alt="Luma Studio" />
+        <h1>LUMA STUDIO</h1>
+        <p>v 1.5</p>
       </div>
     </section>
 
-    <section id="project" class="screen center">
-      <div class="scanlines"></div>
-      <div class="stars"></div>
-      <div class="retro-panel project-box">
-        <div class="titlebar"><span>LUMA STUDIO</span></div>
-
-        <div class="project-content">
-          <div class="form-side">
+    <!-- ========================================================== PROJECT DIALOG -->
+    <section id="project" class="screen project-screen">
+      <div class="project-dialog">
+        <div class="dialog-title">
+          <img src="../assets/logo.png" alt="">
+          <strong>LUMA STUDIO</strong>
+          <span>v 1.5</span>
+        </div>
+        <div class="dialog-body">
+          <div class="form-block">
             <h2>Nouveau projet</h2>
-            <label for="projectName">Nom du projet</label>
-            <input id="projectName" value="MonProjet" maxlength="32" />
-            <label for="editorName">Nom de l’éditeur</label>
-            <input id="editorName" value="I.E.Games_Studio" maxlength="32" />
-            <button id="createProject" class="primary full">CRÉER LE PROJET</button>
+            <label>Nom du projet</label>
+            <input id="projectName" value="MonProjet" maxlength="32">
+            <label>Nom de l'éditeur</label>
+            <input id="editorName" value="I.E.Games_Studio" maxlength="32">
+            <label>Taille cible</label>
+            <select id="projectSize">
+              <option value="200ko">200 Ko</option>
+              <option value="550ko" selected>550 Ko</option>
+              <option value="1mo">1 Mo</option>
+              <option value="2mo">2 Mo</option>
+            </select>
+            <button id="createProject" class="btn blue full">Créer le projet</button>
           </div>
-
-          <div class="separator"></div>
-
-          <div class="size-side">
-            <h2>Taille cible</h2>
-            <button class="size-option" data-size="180ko"><span class="disk">▣</span><strong>180 Ko</strong><em>Petit prototype</em></button>
-            <button class="size-option selected" data-size="550ko"><span class="cursor">▶</span><span class="disk">▣</span><strong>550 Ko</strong><em>Standard rétro</em></button>
-            <button class="size-option" data-size="2mo"><span class="disk">▣</span><strong>2 Mo</strong><em>Grand jeu</em></button>
-
+          <div class="form-block">
             <h2>Projet existant</h2>
-            <button id="openProject" class="secondary full">OUVRIR UN PROJET</button>
+            <p>Ouvre un dossier Luma contenant <code>config.json</code>.</p>
+            <button id="openProject" class="btn full">Ouvrir un projet</button>
+            <p id="status" class="status">Prêt.</p>
           </div>
         </div>
-
-        <footer>
-          <p id="status">Prêt.</p>
-        </footer>
       </div>
     </section>
 
-    <section id="studio" class="screen">
-      <div class="scanlines"></div>
-      <div class="app-shell">
-        <aside class="sidebar">
-          <img src="../assets/logo.png" class="mini-logo" alt="Luma" />
-          <button class="nav-btn active" data-panel="assetPanel">ASSET LAB</button>
-          <button class="nav-btn" data-panel="logicPanel">OBJECTS / EVENTS</button>
-          <button class="nav-btn" data-panel="animationPanel">ANIMATIONS</button>
-          <button class="nav-btn" data-panel="musicPanel">MUSIC 8-BIT</button>
-          <button class="nav-btn" data-panel="narrativePanel">DIALOGUES / CUTSCENES</button>
-          <button class="nav-btn" data-panel="scenePanel">MAP / SCENE EDITOR</button>
-          <button class="nav-btn" data-panel="buildPanel">BUILD / EXPORT</button>
+    <!-- ========================================================== STUDIO -->
+    <section id="studio" class="screen studio-screen">
+
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="brand">
+          <img src="../assets/logo.png" alt="Luma">
+          <strong>v 1.5</strong>
+        </div>
+        <div class="toolbar">
+          <button id="resetMap" class="btn tiny">reset map</button>
+          <button id="btnPlay" class="btn green play" title="Lancer le simulateur console">▶ PLAY</button>
+          <button id="saveAll" class="btn blue save">▣ Save</button>
+          <div class="capacity">
+            <span class="chip" id="capacityIcon">▮</span>
+            <span id="capacityText">Capacité projet 0 o / 550.0 Ko (0%)</span>
+            <div class="capacity-track">
+              <div id="capacityBarFill"></div>
+            </div>
+            <span id="capacityBreakdown" class="capacity-breakdown">—</span>
+          </div>
+        </div>
+        <aside class="library-head">Bibliothèque <span>📁</span></aside>
+      </header>
+
+      <!-- 4-COLUMN LAYOUT -->
+      <div class="layout">
+
+        <!-- LEFT NAV -->
+        <aside class="left-nav">
+          <button class="left-section active" data-mode="scene">Scene Setup</button>
+          <div class="setup-grid" id="sceneSetupGrid">
+            <label>Name :</label><input id="sceneName" value="Scene 1">
+            <label>Map ID</label><input id="mapId" value="map_001">
+            <label>Grid size</label><input id="gridSize" type="number" value="16" min="8" max="64">
+            <label>Show grid</label><input id="showGrid" type="checkbox" checked>
+            <label>Background</label><input id="bgColor" type="color" value="#0a1326">
+            <label>Map W (tiles)</label><input id="mapW" type="number" value="20" min="10">
+            <label>Map H (tiles)</label><input id="mapH" type="number" value="15" min="8">
+            <label>Caméra</label>
+            <select id="cameraMode">
+              <option value="follow_player">Follow player</option>
+              <option value="fixed">Fixed screen</option>
+              <option value="manual">Manual preview</option>
+            </select>
+          </div>
+          <button id="createScene" class="btn blue full" style="margin:4px 6px">CRÉER / RESET MAP</button>
+
+          <button class="left-section" data-mode="sprite">Sprite Editor</button>
+          <button class="left-section" data-mode="music">Music Editor</button>
+          <button class="left-section" data-mode="animation">Animation Editor</button>
+          <button class="left-section" data-mode="objects">Objects / Events</button>
+          <button class="left-section" data-mode="build">Build / Export</button>
+
           <div class="project-path" id="projectPath">Aucun projet</div>
         </aside>
 
-        <section class="workspace">
-          <header class="workspace-header">
-            <div class="header-left">
-              <button id="btnSimulate" class="primary simulate-btn" title="Lancer le simulateur console">▶ SIMULER</button>
-              <div>
-                <h1 id="workspaceTitle">ASSET LAB</h1>
-                <p id="workspaceSubtitle">Pipeline Luma : assets, logique, musique, dialogues et cinématiques.</p>
+        <!-- CENTER (workspace) -->
+        <section class="center">
+          <nav class="tabs" id="workspaceTabs"></nav>
+
+          <!-- SCENE WORKSPACE : map editor -->
+          <section id="sceneWorkspace" class="workspace active">
+            <div class="scene-canvas-panel">
+              <span class="preview-label">Preview écran Luma 160×128</span>
+              <div class="scene-toolbar">
+                <select id="mapTool">
+                  <option value="paint">🎨 Peindre tile</option>
+                  <option value="erase">⌫ Effacer</option>
+                  <option value="collision">🛑 Collision</option>
+                  <option value="object">📦 Placer objet</option>
+                  <option value="trigger">⚡ Trigger</option>
+                  <option value="spawn">⭐ Spawn joueur</option>
+                  <option value="camera">📷 Caméra</option>
+                </select>
+                <input id="tilePaintValue" type="number" min="1" max="7" value="1" title="Index tile à peindre">
+                <select id="paintLayer">
+                  <option value="floor">Floor</option>
+                  <option value="decor">Decor</option>
+                </select>
+                <button id="toggleCamera" class="btn tiny">Cadre caméra</button>
+                <button id="centerCamera" class="btn tiny">Centrer caméra</button>
+                <button id="playScenePreview" class="btn tiny">Test joueur</button>
+                <span id="mapInfo" class="map-info">Crée une map d'abord.</span>
+              </div>
+              <div class="scene-canvas-wrap">
+                <canvas id="mapCanvas" width="320" height="240"></canvas>
+              </div>
+              <div class="scene-bottom">
+                <canvas id="lumaPreviewCanvas" width="160" height="128" title="Aperçu écran console"></canvas>
+                <div class="scene-mem">
+                  <span>Tiles: <strong id="sceneTilesMem">0</strong></span>
+                  <span>Collision: <strong id="sceneCollisionMem">0</strong></span>
+                  <span>Objects: <strong id="sceneObjectsMem">0</strong></span>
+                  <span>Triggers: <strong id="sceneTriggersMem">0</strong></span>
+                  <span>Total: <strong id="sceneTotalMem">0</strong></span>
+                </div>
               </div>
             </div>
-            <button id="saveAll" class="primary">SAUVEGARDER</button>
-          </header>
+          </section>
 
-          <div class="capacity-bar-wrap">
-            <div class="capacity-bar-header">
-              <span class="capacity-label">📦 Capacité projet</span>
-              <span id="capacityText" class="capacity-text">0 o / 550 Ko</span>
-              <span id="capacityBreakdown" class="capacity-breakdown">— sprites: 0 · audio: 0 · maps: 0 · code: 0 —</span>
-            </div>
-            <div class="capacity-bar-track">
-              <div id="capacityBarFill" class="capacity-bar-fill" style="width:0%"></div>
-              <div id="capacityBarMarker" class="capacity-bar-marker" style="left:80%" title="80% — alerte"></div>
-            </div>
-          </div>
-
-          <section id="assetPanel" class="panel active">
-            <div class="help-box"><strong>Asset Lab :</strong> import, découpe et estimation mémoire RGB565.</div>
-            <div class="lab-grid">
-              <section class="tool-panel">
-                <h2>Découpe spritesheet</h2>
-                <button id="importImage" class="primary full">IMPORTER IMAGE / GIF</button>
-                <label>Taille</label>
-                <div class="inline-controls">
-                  <select id="presetSize">
-                    <option value="8">8x8</option>
-                    <option value="16" selected>16x16</option>
-                    <option value="32">32x32</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                  <input id="frameW" type="number" value="16" min="1" />
-                  <input id="frameH" type="number" value="16" min="1" />
+          <!-- SPRITE WORKSPACE : asset lab + pixel editor overlay -->
+          <section id="spriteWorkspace" class="workspace">
+            <div class="sprite-grid">
+              <aside class="sprite-form">
+                <button id="importImage" class="btn full">📂 Importer image</button>
+                <div class="property-card">
+                  <div><label>Nom :</label><input id="spriteName" value="sprite_01"></div>
+                  <div><label>ID</label><input id="spriteId" value="01" readonly></div>
+                  <div><label>Largeur</label><input id="spriteWidth" type="number" value="16" min="4" max="128"></div>
+                  <div><label>Hauteur</label><input id="spriteHeight" type="number" value="16" min="4" max="128"></div>
+                  <div><label>Mémoire</label><input id="spriteMemory" readonly></div>
                 </div>
-                <label>Nom de base</label>
-                <input id="baseName" value="sprite" />
-                <label>Dossier</label>
-                <select id="folderName">
-                  <option>player</option><option>enemy</option><option>tiles</option><option>items</option><option>portraits</option><option>fx</option>
-                </select>
-                <label>Type</label>
-                <select id="usageType">
-                  <option value="frame">Simple frame</option><option value="animation">Animation</option><option value="object_player">Objet jouable</option><option value="object_enemy">Ennemi</option><option value="tile">Tile</option><option value="portrait">Portrait</option><option value="item">Item</option>
-                </select>
-                <button id="sliceImage" class="primary full">DÉCOUPER</button>
-                <button id="saveFrames" class="secondary full">SAUVER FRAMES.JSON</button>
-                <div class="memory-card">
-                  <p><span>Frames</span><strong id="memFrames">0</strong></p>
-                  <p><span>RGB565</span><strong id="memRaw">0 Ko</strong></p>
-                  <div class="bar"><div id="memBar"></div></div>
+                <label class="small-title">Preview console 160×128</label>
+                <canvas id="spritePreview" width="160" height="128"></canvas>
+                <button id="sliceFromImage" class="btn full">✂ Découper en grille</button>
+                <button id="addSpriteAsObject" class="btn blue full">+ Ajouter objet</button>
+                <p class="small-text" id="framesCount">0 frames</p>
+                <div class="memory-block">
+                  <div class="memory-bar">
+                    <div id="memBar"></div>
+                  </div>
+                  <p>RAW : <span id="memRaw">0</span> · <span id="memFrames">0</span> frames · <span id="frameCount">0</span></p>
                 </div>
-              </section>
-              <section class="preview-panel">
-                <h2>Image source</h2>
-                <div class="canvas-wrap"><canvas id="sourceCanvas"></canvas></div>
-                <p id="imageInfo">Aucune image importée.</p>
-              </section>
-              <section class="frames-panel">
-                <div class="frames-title"><h2>Frames</h2><span id="frameCount">0 frame</span></div>
+              </aside>
+              <section class="sprite-main">
+                <div class="sprite-canvas-wrap">
+                  <canvas id="spriteCanvas" width="640" height="320"></canvas>
+                </div>
                 <div id="framesGrid" class="frames-grid"></div>
               </section>
             </div>
           </section>
 
-          <section id="logicPanel" class="panel">
-            <!-- V1.4 : contenu généré par object-editor.js (constructeur visuel) -->
+          <!-- MUSIC WORKSPACE : piano roll V1.3 -->
+          <section id="musicWorkspace" class="workspace">
+            <section id="musicPanel" class="panel-injected"></section>
           </section>
 
-          <section id="animationPanel" class="panel">
-            <!-- contenu généré par animation-editor.js sur 1er clic du nav-btn -->
+          <!-- ANIMATION WORKSPACE : V1.1 anim editor -->
+          <section id="animationWorkspace" class="workspace">
+            <section id="animationPanel" class="panel-injected"></section>
           </section>
 
-          <section id="musicPanel" class="panel">
-            <!-- contenu généré par music-editor.js V1.3 (piano roll) -->
+          <!-- OBJECTS WORKSPACE : V1.4 object editor -->
+          <section id="objectsWorkspace" class="workspace">
+            <section id="logicPanel" class="panel-injected"></section>
           </section>
 
-          <section id="narrativePanel" class="panel">
-            <div class="help-box"><strong>V1.0 :</strong> dialogues, portraits, cutscenes et triggers narratifs.</div>
-            <div class="three-cols">
-              <section class="tool-panel">
-                <h2>Dialogue Editor</h2>
-                <input id="dialogId" placeholder="intro_radio_01" />
-                <input id="dialogSpeaker" placeholder="COMMANDER, NPC, HERO..." />
-                <input id="dialogPortrait" placeholder="portrait_id" />
-                <textarea id="dialogText" placeholder="Snake... tu m'entends ?"></textarea>
-                <input id="dialogNext" placeholder="next dialogue id" />
-                <label>Vitesse texte</label><input id="dialogSpeed" type="number" value="30" />
-                <button id="importPortrait" class="secondary full">IMPORTER PORTRAIT</button>
-                <button id="addDialogue" class="primary full">AJOUTER DIALOGUE</button>
-                <div id="dialoguesList" class="data-list"></div>
-              </section>
-
-              <section class="tool-panel">
-                <h2>Cutscene Timeline</h2>
-                <input id="cutsceneId" placeholder="intro_cutscene" />
-                <div class="inline-controls">
-                  <input id="cutTime" type="number" value="0" />
-                  <select id="cutAction"><option>Fade In</option><option>Fade Out</option><option>Start Dialogue</option><option>Move Object</option><option>Play Music</option><option>Play Sound</option><option>Shake Screen</option><option>Flash</option><option>Load Scene</option></select>
-                </div>
-                <input id="cutTarget" placeholder="target" />
-                <input id="cutValue" placeholder="value" />
-                <button id="addCutStep" class="secondary full">AJOUTER STEP</button>
-                <button id="addCutscene" class="primary full">SAUVER CUTSCENE</button>
-                <div id="cutSteps" class="data-list"></div>
-                <div id="cutscenesList" class="data-list"></div>
-              </section>
-
-              <section class="tool-panel">
-                <h2>Trigger System</h2>
-                <input id="triggerId" placeholder="trigger_intro" />
-                <select id="triggerCondition"><option>player_enter_zone</option><option>player_interact_npc</option><option>dialogue_finished</option><option>enemy_dead</option><option>item_collected</option><option>timer_finished</option></select>
-                <select id="triggerAction"><option>start_dialogue</option><option>play_cutscene</option><option>change_scene</option><option>set_variable</option><option>give_item</option><option>play_music</option></select>
-                <input id="triggerTarget" placeholder="intro_radio_01 / cutscene_id..." />
-                <button id="addTrigger" class="primary full">AJOUTER TRIGGER</button>
-                <div id="triggersList" class="data-list"></div>
-
-                <h2>Preview dialogue</h2>
-                <div class="dialog-preview">
-                  <div class="portrait-preview" id="portraitPreview">PORTRAIT</div>
-                  <div><strong id="previewSpeaker">SPEAKER</strong><p id="previewText">Le texte du dialogue apparaîtra ici.</p></div>
-                </div>
-              </section>
+          <!-- BUILD WORKSPACE -->
+          <section id="buildWorkspace" class="workspace placeholder">
+            <h2>🚀 Build / Export</h2>
+            <p>Pipeline : sprites RGB565 → .lpk · scenes + objects + music → game.luma · manifest.json</p>
+            <div class="build-controls">
+              <label>Export sécurisé (chiffrement XOR/SHA-256) :</label>
+              <input id="secureKey" type="password" placeholder="Clé optionnelle (laisser vide = clair)">
+              <button id="buildGame" class="btn blue">▶ BUILD GAME</button>
             </div>
+            <div id="buildLog" class="build-log">Aucun build pour l'instant.</div>
           </section>
-
-          <section id="scenePanel" class="panel">
-            <div class="help-box">
-              <strong>V1.0 :</strong> Map/Scene Editor. Crée des salles jouables avec tiles, collisions, objets, triggers, caméra 160x128 et export scène.
-            </div>
-
-            <div class="scene-layout">
-              <section class="tool-panel">
-                <h2>Scene Setup</h2>
-                <label>Scene ID</label>
-                <input id="sceneId" value="bunker_entry" />
-
-                <label>Nom affiché</label>
-                <input id="sceneName" value="Entrée du bunker" />
-
-                <label>Map ID</label>
-                <input id="mapId" value="map_bunker_01" />
-
-                <div class="inline-controls">
-                  <div><label>Largeur tiles</label><input id="mapW" type="number" value="20" min="10" /></div>
-                  <div><label>Hauteur tiles</label><input id="mapH" type="number" value="15" min="8" /></div>
-                  <div><label>Tile</label><input id="mapTileSize" type="number" value="16" min="8" /></div>
-                </div>
-
-                <label>Musique liée</label>
-                <input id="sceneMusic" value="theme_01" />
-
-                <label>Caméra</label>
-                <select id="cameraMode">
-                  <option value="follow_player">Follow player</option>
-                  <option value="fixed">Fixed screen</option>
-                  <option value="manual">Manual preview</option>
-                </select>
-
-                <button id="createScene" class="primary full">CRÉER / RESET MAP</button>
-                <button id="saveScene" class="secondary full">SAUVER SCENE + EXPORT</button>
-
-                <h2>Outils</h2>
-                <select id="mapTool">
-                  <option value="paint">Peindre tile</option>
-                  <option value="erase">Effacer</option>
-                  <option value="collision">Collision</option>
-                  <option value="object">Placer objet</option>
-                  <option value="trigger">Placer trigger</option>
-                  <option value="spawn">Placer spawn</option>
-                  <option value="camera">Déplacer caméra</option>
-                </select>
-
-                <label>Layer</label>
-                <select id="mapLayer">
-                  <option value="floor">Sol</option>
-                  <option value="decor">Décor</option>
-                  <option value="collision">Collision</option>
-                </select>
-
-                <label>Tile ID</label>
-                <input id="tileId" type="number" value="1" min="0" max="255" />
-
-                <label>Objet source</label>
-                <input id="placeObjectId" value="guard" />
-
-                <label>Trigger action / target</label>
-                <input id="placeTriggerAction" value="start_dialogue" />
-                <input id="placeTriggerTarget" value="intro_radio_01" />
-
-                <div class="memory-card">
-                  <p><span>Tiles</span><strong id="sceneTilesMem">0 o</strong></p>
-                  <p><span>Collisions</span><strong id="sceneCollisionMem">0 o</strong></p>
-                  <p><span>Objets</span><strong id="sceneObjectsMem">0 o</strong></p>
-                  <p><span>Triggers</span><strong id="sceneTriggersMem">0 o</strong></p>
-                  <p><span>Total scène</span><strong id="sceneTotalMem">0 o</strong></p>
-                </div>
-              </section>
-
-              <section class="map-workspace">
-                <div class="map-toolbar">
-                  <button id="toggleCamera" class="secondary">Caméra 160x128</button>
-                  <button id="centerCamera" class="secondary">Centrer sur spawn</button>
-                  <button id="playScenePreview" class="secondary">PLAY SCENE</button>
-                  <span id="mapInfo">Aucune map</span>
-                </div>
-
-                <div class="map-scroll">
-                  <canvas id="mapCanvas"></canvas>
-                </div>
-
-                <div class="scene-preview-box">
-                  <h2>Preview écran Luma 160x128</h2>
-                  <canvas id="lumaPreviewCanvas"></canvas>
-                  <p>Ce cadre montre ce que la console verra réellement.</p>
-                </div>
-              </section>
-
-              <section class="tool-panel">
-                <h2>Composition scène</h2>
-                <h3>Spawn</h3>
-                <div id="spawnInfo" class="data-list small-list"></div>
-
-                <h3>Objets placés</h3>
-                <div id="placedObjectsList" class="data-list small-list"></div>
-
-                <h3>Triggers placés</h3>
-                <div id="placedTriggersList" class="data-list small-list"></div>
-
-                <h3>Export</h3>
-                <p class="small-text">
-                  V1.0 exporte maps.json, scenes.json, scene_preview.luma et un premier .lmapbin simple.
-                </p>
-              </section>
-            </div>
-          </section>
-
-
-          <section id="buildPanel" class="panel">
-            <div class="help-box">
-              <strong>V1.0 :</strong> Build Game. Analyse le projet, génère game.luma + assets.lpk, crée le manifest, option export sécurisé et copie SD.
-            </div>
-
-            <div class="build-layout">
-              <section class="tool-panel">
-                <h2>Build Settings</h2>
-
-                <label>Mode export</label>
-                <select id="buildMode">
-                  <option value="normal">Export normal</option>
-                  <option value="secure">Export sécurisé anti-dump simple</option>
-                </select>
-
-                <label>Copie carte SD</label>
-                <select id="sdDriveSelect">
-                  <option value="">Aucun lecteur sélectionné</option>
-                </select>
-
-                <button id="scanDrives" class="secondary full">RECHERCHER LECTEURS / SD</button>
-                <button id="buildGame" class="primary full">BUILD GAME</button>
-
-                <div class="memory-card">
-                  <p><span>game.luma</span><strong id="buildGameSize">-</strong></p>
-                  <p><span>assets.lpk</span><strong id="buildAssetSize">-</strong></p>
-                  <p><span>Total</span><strong id="buildTotalSize">-</strong></p>
-                  <p><span>Secure</span><strong id="buildSecureState">OFF</strong></p>
-                </div>
-
-                <p class="small-text">
-                  Le chiffrement V1.0 est une première protection contre le dump facile.
-                  Le lecteur sécurisé côté console sera ajouté plus tard.
-                </p>
-              </section>
-
-              <section class="build-center">
-                <h2>Export Animation</h2>
-
-                <div class="retro-computer">
-                  <div class="crt">
-                    <div id="buildCheck" class="build-check">✓</div>
-                    <div id="crtText">READY</div>
-                  </div>
-                  <div class="pc-body">
-                    <div class="drive-slot"></div>
-                    <div id="floppy" class="floppy">
-                      <div class="floppy-label">LUMA</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="build-progress">
-                  <div id="buildProgressBar"></div>
-                </div>
-
-                <div id="buildSteps" class="data-list build-steps"></div>
-              </section>
-
-              <section class="tool-panel">
-                <h2>Analyse projet</h2>
-                <div id="buildValidation" class="data-list build-validation">
-                  <div class="data-item">Clique sur BUILD GAME pour analyser le projet.</div>
-                </div>
-
-                <h2>Sortie</h2>
-                <div id="buildOutput" class="data-list build-output">
-                  <div class="data-item">Aucun export pour le moment.</div>
-                </div>
-              </section>
-            </div>
-          </section>
-
         </section>
+
+        <!-- RIGHT INSPECTOR -->
+        <aside class="right-inspector">
+          <section class="inspector-box">
+            <h3>🎨 Sprites <span id="spriteListCount" class="count">0</span></h3>
+            <div id="spriteList" class="table-list"></div>
+          </section>
+          <section class="inspector-box">
+            <h3>🎵 Music <span id="musicListCount" class="count">1</span></h3>
+            <div id="musicList" class="table-list"></div>
+          </section>
+          <section class="inspector-control">
+            <label>Caméra</label>
+            <select id="inspCameraMode">
+              <option value="follow_player">Follow</option>
+              <option value="fixed">Fixed</option>
+              <option value="manual">Manual</option>
+            </select>
+          </section>
+          <section class="inspector-control">
+            <label>Layer</label>
+            <select id="inspLayer">
+              <option value="floor">Floor</option>
+              <option value="decor">Decor</option>
+              <option value="collision">Collision</option>
+              <option value="objects">Objects</option>
+            </select>
+          </section>
+          <section class="object-preview" id="selectedObjectPreview">
+            <strong>Objet sélectionné</strong>
+            <p>Glisse un objet sur la map ou clique sur un sprite.</p>
+          </section>
+        </aside>
+
+        <!-- LIBRARY -->
+        <aside class="library">
+          <details open>
+            <summary>🎨 Sprites <span id="libSpritesCount" class="count">0</span></summary>
+            <div id="libSprites" class="lib-list"></div>
+          </details>
+          <details>
+            <summary>🎬 Animations <span id="libAnimsCount" class="count">0</span></summary>
+            <div id="libAnims" class="lib-list"></div>
+          </details>
+          <details open>
+            <summary>📦 Objects <span id="libObjectsCount" class="count">0</span></summary>
+            <div id="libObjects" class="lib-list"></div>
+          </details>
+          <details>
+            <summary>🗺 Maps <span id="libMapsCount" class="count">0</span></summary>
+            <div id="libMaps" class="lib-list"></div>
+          </details>
+          <details>
+            <summary>🎵 Musique <span id="libMusicCount" class="count">1</span></summary>
+            <div id="libMusic" class="lib-list"></div>
+          </details>
+          <details>
+            <summary>💬 Dialogues <span id="libDialoguesCount" class="count">0</span></summary>
+            <div id="libDialogues" class="lib-list empty">Aucun dialogue.</div>
+          </details>
+          <details>
+            <summary>⚡ Events <span id="libEventsCount" class="count">0</span></summary>
+            <div id="libEvents" class="lib-list empty">Aucun event.</div>
+          </details>
+        </aside>
       </div>
+
+      <!-- BOTTOMBAR -->
+      <footer class="bottombar">
+        <span id="hint">💡 Glisse un sprite ou un objet de la bibliothèque vers la map. Tous les placements d'un même ID = même objet.</span>
+        <span id="footRight">Luma Studio v1.5</span>
+      </footer>
     </section>
   </main>
+
   <script src="app.js"></script>
   <script src="sprite-editor.js"></script>
   <script src="gif-encoder.js"></script>
