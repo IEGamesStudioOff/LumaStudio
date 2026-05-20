@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.5</title>
+  <title>Luma Studio v1.5.1</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
       <div class="splash-card">
         <img src="../assets/logo.png" alt="Luma Studio" />
         <h1>LUMA STUDIO</h1>
-        <p>v 1.5</p>
+        <p>v 1.5.1</p>
       </div>
     </section>
 
@@ -25,7 +25,7 @@
         <div class="dialog-title">
           <img src="../assets/logo.png" alt="">
           <strong>LUMA STUDIO</strong>
-          <span>v 1.5</span>
+          <span>v 1.5.1</span>
         </div>
         <div class="dialog-body">
           <div class="form-block">
@@ -60,7 +60,7 @@
       <header class="topbar">
         <div class="brand">
           <img src="../assets/logo.png" alt="Luma">
-          <strong>v 1.5</strong>
+          <strong>v 1.5.1</strong>
         </div>
         <div class="toolbar">
           <button id="resetMap" class="btn tiny">reset map</button>
@@ -98,12 +98,22 @@
               <option value="fixed">Fixed screen</option>
               <option value="manual">Manual preview</option>
             </select>
+            <label>Musique</label>
+            <select id="sceneMusic">
+              <option value="theme_01">theme_01</option>
+            </select>
+            <label>Layer actif</label>
+            <select id="sceneLayer">
+              <option value="floor">Floor</option>
+              <option value="decor">Decor</option>
+              <option value="collision">Collision</option>
+              <option value="objects">Objects</option>
+            </select>
           </div>
           <button id="createScene" class="btn blue full" style="margin:4px 6px">CRÉER / RESET MAP</button>
 
           <button class="left-section" data-mode="sprite">Sprite Editor</button>
           <button class="left-section" data-mode="music">Music Editor</button>
-          <button class="left-section" data-mode="animation">Animation Editor</button>
           <button class="left-section" data-mode="objects">Objects / Events</button>
           <button class="left-section" data-mode="build">Build / Export</button>
 
@@ -132,6 +142,9 @@
                 <select id="paintLayer">
                   <option value="floor">Floor</option>
                   <option value="decor">Decor</option>
+                </select>
+                <select id="sceneObjectPicker" class="object-picker" title="Objet à placer sur la map">
+                  <option value="">— Aucun objet —</option>
                 </select>
                 <button id="toggleCamera" class="btn tiny">Cadre caméra</button>
                 <button id="centerCamera" class="btn tiny">Centrer caméra</button>
@@ -192,11 +205,6 @@
             <section id="musicPanel" class="panel-injected"></section>
           </section>
 
-          <!-- ANIMATION WORKSPACE : V1.1 anim editor -->
-          <section id="animationWorkspace" class="workspace">
-            <section id="animationPanel" class="panel-injected"></section>
-          </section>
-
           <!-- OBJECTS WORKSPACE : V1.4 object editor -->
           <section id="objectsWorkspace" class="workspace">
             <section id="logicPanel" class="panel-injected"></section>
@@ -215,48 +223,11 @@
           </section>
         </section>
 
-        <!-- RIGHT INSPECTOR -->
-        <aside class="right-inspector">
-          <section class="inspector-box">
-            <h3>🎨 Sprites <span id="spriteListCount" class="count">0</span></h3>
-            <div id="spriteList" class="table-list"></div>
-          </section>
-          <section class="inspector-box">
-            <h3>🎵 Music <span id="musicListCount" class="count">1</span></h3>
-            <div id="musicList" class="table-list"></div>
-          </section>
-          <section class="inspector-control">
-            <label>Caméra</label>
-            <select id="inspCameraMode">
-              <option value="follow_player">Follow</option>
-              <option value="fixed">Fixed</option>
-              <option value="manual">Manual</option>
-            </select>
-          </section>
-          <section class="inspector-control">
-            <label>Layer</label>
-            <select id="inspLayer">
-              <option value="floor">Floor</option>
-              <option value="decor">Decor</option>
-              <option value="collision">Collision</option>
-              <option value="objects">Objects</option>
-            </select>
-          </section>
-          <section class="object-preview" id="selectedObjectPreview">
-            <strong>Objet sélectionné</strong>
-            <p>Glisse un objet sur la map ou clique sur un sprite.</p>
-          </section>
-        </aside>
-
-        <!-- LIBRARY -->
+        <!-- LIBRARY (la seule colonne à droite — plus de right-inspector dupliquée) -->
         <aside class="library">
           <details open>
             <summary>🎨 Sprites <span id="libSpritesCount" class="count">0</span></summary>
             <div id="libSprites" class="lib-list"></div>
-          </details>
-          <details>
-            <summary>🎬 Animations <span id="libAnimsCount" class="count">0</span></summary>
-            <div id="libAnims" class="lib-list"></div>
           </details>
           <details open>
             <summary>📦 Objects <span id="libObjectsCount" class="count">0</span></summary>
@@ -284,18 +255,15 @@
       <!-- BOTTOMBAR -->
       <footer class="bottombar">
         <span id="hint">💡 Glisse un sprite ou un objet de la bibliothèque vers la map. Tous les placements d'un même ID = même objet.</span>
-        <span id="footRight">Luma Studio v1.5</span>
+        <span id="footRight">Luma Studio v1.5.1</span>
       </footer>
     </section>
   </main>
 
   <script src="app.js"></script>
   <script src="sprite-editor.js"></script>
-  <script src="gif-encoder.js"></script>
-  <script src="animation-editor.js"></script>
   <script src="music-editor.js"></script>
   <script src="object-editor.js"></script>
-  <script src="library-browser.js"></script>
   <script src="simulator.js"></script>
 </body>
 </html>

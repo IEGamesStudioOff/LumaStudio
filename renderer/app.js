@@ -149,9 +149,9 @@ function enterStudio(path, data = null) {
   setMode("scene");
   setTimeout(() => {
     if (window.LumaMusicEditor)  window.LumaMusicEditor.init();
-    if (window.LumaAnimEditor)   window.LumaAnimEditor.init();
     if (window.LumaObjectEditor) window.LumaObjectEditor.init();
-    if (window.LumaLibrary)      window.LumaLibrary.init();
+    // V1.5.1 — LumaLibrary désactivé : la library est gérée par populateLibrary()
+    // qui peuple directement les divs statiques du HTML.
     refreshAllLists();
     updateCapacityBar();
     if (currentMap && currentScene) renderSceneEditor();
@@ -176,7 +176,6 @@ function setMode(mode) {
   if (mode === "scene" && currentMap && currentScene) renderSceneEditor();
   if (mode === "sprite") drawSpriteWorkspace();
   if (mode === "music"  && window.LumaMusicEditor)  window.LumaMusicEditor.init();
-  if (mode === "animation" && window.LumaAnimEditor) window.LumaAnimEditor.init();
   if (mode === "objects" && window.LumaObjectEditor) window.LumaObjectEditor.init();
 }
 
@@ -186,7 +185,7 @@ function refreshTabs() {
   tabs.innerHTML = "";
   const labels = {
     scene: "🗺 Scène", sprite: "🎨 Asset Lab", music: "🎵 Piano Roll",
-    animation: "🎬 Timeline", objects: "📦 Objects / Events", build: "🚀 Build"
+    objects: "📦 Objects / Events", build: "🚀 Build"
   };
   const lab = labels[currentMode] || currentMode;
   const t = document.createElement("button");
@@ -221,7 +220,6 @@ $("btnPlay").addEventListener("click", () => {
 
 $("saveAll").addEventListener("click", async () => {
   try {
-    if (window.LumaAnimEditor) animations = window.LumaAnimEditor.getAnimations() || animations;
     if (window.LumaMusicEditor) window.LumaMusicEditor.rebuildTracksFromGrid();
     await window.lumaAPI.saveFrames(frames);
     if (window.lumaAPI.saveAnimations) await window.lumaAPI.saveAnimations(animations);
@@ -374,11 +372,17 @@ function handleMapClick(event) {
       action: "Start Dialogue", target: ""
     });
   } else if (tool === "object") {
-    if (objects.length === 0) {
-      $("hint").textContent = "Aucun objet défini. Crée-en un dans Objects.";
+    const picker = $("sceneObjectPicker");
+    const pickedId = picker ? picker.value : "";
+    if (!pickedId) {
+      $("hint").textContent = "⚠ Choisis un objet dans le menu déroulant à côté de l'outil avant de cliquer sur la map.";
       return;
     }
-    const o = objects[0];
+    const o = objects.find(o => String(o.id) === String(pickedId));
+    if (!o) {
+      $("hint").textContent = "⚠ Objet introuvable. Crée-en un dans Objects.";
+      return;
+    }
     const f = frames.find(fr => fr.id === o.spriteFrameId);
     currentScene.objects.push({
       objectId: o.id,
@@ -387,6 +391,7 @@ function handleMapClick(event) {
       layer: "objects", enabled: true, variables: {},
       w: f ? f.w : 16, h: f ? f.h : 16
     });
+    $("hint").textContent = `✅ ${o.name} placé en (${tx},${ty}).`;
   }
   renderSceneEditor();
   updateCapacityBar();
@@ -792,8 +797,7 @@ $("addSpriteAsObject").addEventListener("click", () => {
   objects.push(obj);
   refreshAllLists();
   updateCapacityBar();
-  selectObject(obj);
-  $("hint").textContent = `✅ Objet « ${obj.name} » créé.`;
+  $("hint").textContent = `✅ Objet « ${obj.name} » créé. Va dans Objects pour configurer son comportement.`;
 });
 
 function drawSpriteWorkspace() {
@@ -894,62 +898,112 @@ $("buildGame").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// LISTS — inspector + library
+// LISTS — library + object picker (plus de right-inspector)
 // ---------------------------------------------------------------------------
 function refreshAllLists() {
-  refreshInspectorSprites();
-  refreshInspectorMusic();
-  if (window.LumaLibrary) window.LumaLibrary.refresh();
+  refreshObjectPicker();
+  refreshMusicPicker();
+  populateLibrary();
 }
 
-function refreshInspectorSprites() {
-  const el = $("spriteList");
+// V1.5.1 — Peuple les divs library statiques du HTML
+function populateLibrary() {
+  populateLibSection("libSprites", "libSpritesCount", frames, (f) => {
+    const btn = document.createElement("button");
+    btn.textContent = `${String(f.id).slice(-4)} · ${f.name} (${f.w}×${f.h})`;
+    btn.draggable = true;
+    btn.title = "Drag vers la map pour créer un objet, click pour éditer";
+    btn.ondragstart = (e) => e.dataTransfer.setData("application/x-luma-frame", String(f.id));
+    btn.onclick = () => {
+      if (window.LumaSpriteEditor) {
+        const idx = frames.indexOf(f);
+        if (idx >= 0) window.LumaSpriteEditor.open(idx);
+      }
+    };
+    return btn;
+  }, "Aucun sprite. Importe une image dans Sprite Editor.");
+
+  populateLibSection("libObjects", "libObjectsCount", objects, (o) => {
+    const btn = document.createElement("button");
+    const typeInfo = OBJECT_TYPES.find(t => t.id === o.type);
+    const icon = typeInfo ? typeInfo.label.split(" ")[0] : "📦";
+    btn.textContent = `${icon} #${String(o.id).padStart(2,"0")} ${o.name}`;
+    btn.draggable = true;
+    btn.title = `Drag vers la map pour placer · click pour éditer`;
+    btn.ondragstart = (e) => e.dataTransfer.setData("application/x-luma-object", String(o.id));
+    btn.onclick = () => setMode("objects");
+    return btn;
+  }, "Aucun objet. Crée-en un dans Objects/Events.");
+
+  populateLibSection("libMaps", "libMapsCount", maps, (m) => {
+    const btn = document.createElement("button");
+    btn.textContent = `🗺 ${m.id} (${m.width}×${m.height})`;
+    btn.onclick = () => { currentMap = m; renderSceneEditor(); };
+    return btn;
+  }, "Aucune map.");
+
+  populateLibSection("libMusic", "libMusicCount", [music], (m) => {
+    const btn = document.createElement("button");
+    btn.textContent = `🎵 ${m.name || "theme_01"} · ${m.tempo || 120}BPM`;
+    btn.onclick = () => setMode("music");
+    return btn;
+  }, "");
+
+  populateLibSection("libDialogues", "libDialoguesCount", dialogues, (d) => {
+    const btn = document.createElement("button");
+    btn.textContent = `💬 ${d.id || "dlg"}`;
+    return btn;
+  }, "Aucun dialogue.");
+
+  populateLibSection("libEvents", "libEventsCount", events, (e) => {
+    const btn = document.createElement("button");
+    btn.textContent = `⚡ ${e.name || "event"}`;
+    return btn;
+  }, "Aucun event.");
+}
+
+function populateLibSection(divId, countId, items, makeBtn, emptyText) {
+  const el = $(divId);
   if (!el) return;
   el.innerHTML = "";
-  if (frames.length === 0) {
-    el.innerHTML = '<button class="empty">Aucun sprite</button>';
+  if (items.length === 0) {
+    el.className = "lib-list empty";
+    el.textContent = emptyText;
   } else {
-    for (const f of frames) {
-      const btn = document.createElement("button");
-      btn.textContent = `${String(f.id).slice(-4)} · ${f.name}`;
-      btn.draggable = true;
-      btn.ondragstart = (e) => e.dataTransfer.setData("application/x-luma-frame", String(f.id));
-      btn.onclick = () => {
-        if (window.LumaSpriteEditor) {
-          const idx = frames.indexOf(f);
-          if (idx >= 0) window.LumaSpriteEditor.open(idx);
-        }
-      };
-      el.appendChild(btn);
-    }
+    el.className = "lib-list";
+    for (const item of items) el.appendChild(makeBtn(item));
   }
-  if ($("spriteListCount")) $("spriteListCount").textContent = frames.length;
+  const c = $(countId);
+  if (c) c.textContent = items.length;
 }
 
-function refreshInspectorMusic() {
-  const el = $("musicList");
-  if (!el) return;
-  el.innerHTML = "";
-  const btn = document.createElement("button");
-  btn.textContent = `🎵 ${music.name || "theme_01"} · ${music.tempo}BPM`;
-  btn.onclick = () => setMode("music");
-  el.appendChild(btn);
-  if ($("musicListCount")) $("musicListCount").textContent = 1;
+// Peuple le menu déroulant "Objet à placer" dans la scene toolbar
+function refreshObjectPicker() {
+  const picker = $("sceneObjectPicker");
+  if (!picker) return;
+  const prev = picker.value;
+  picker.innerHTML = '<option value="">— Aucun objet —</option>';
+  for (const o of objects) {
+    const opt = document.createElement("option");
+    opt.value = String(o.id);
+    const typeInfo = OBJECT_TYPES.find(t => t.id === o.type);
+    const typeLabel = typeInfo ? typeInfo.label.split(" ")[0] : "";
+    opt.textContent = `${typeLabel} ${o.name} (#${String(o.id).padStart(2,"0")})`;
+    picker.appendChild(opt);
+  }
+  if (prev && objects.find(o => String(o.id) === prev)) picker.value = prev;
+}
+
+function refreshMusicPicker() {
+  const sel = $("sceneMusic");
+  if (!sel) return;
+  sel.innerHTML = `<option value="${music.name || "theme_01"}">${music.name || "theme_01"}</option>`;
 }
 
 function selectObject(o) {
   if (!o) return;
-  const el = $("selectedObjectPreview");
-  if (!el) return;
   const f = frames.find(fr => fr.id === o.spriteFrameId);
-  const typeInfo = OBJECT_TYPES.find(t => t.id === o.type) || { label: o.type, color: "#888" };
-  el.innerHTML = `
-    <strong>${o.name}</strong>
-    <p>ID : ${String(o.id).padStart(2, "0")}</p>
-    <p style="color:${typeInfo.color}">Type : ${typeInfo.label}</p>
-    <p>Sprite : ${f ? f.name : "<em>aucun</em>"}</p>
-    <p>Behavior : ${o.behavior || "None"}</p>
-  `;
+  $("hint").textContent = `🎯 ${o.name} (#${String(o.id).padStart(2,"0")}) — ${o.type} — sprite: ${f ? f.name : "aucun"} — behavior: ${o.behavior || "None"}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -997,10 +1051,6 @@ function renderTriggers() {}
 function renderAll() {
   renderObjects(); renderEvents();
   if (currentMap && currentScene) renderSceneEditor();
-  if (window.LumaAnimEditor) {
-    window.animations = animations;
-    window.LumaAnimEditor.setAnimations(animations);
-  }
   if (window.LumaMusicEditor) window.LumaMusicEditor.refresh();
   refreshAllLists();
   updateCapacityBar();

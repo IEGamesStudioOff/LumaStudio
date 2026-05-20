@@ -11,6 +11,15 @@
 
   const TRANSPARENT = 0xF81F;
 
+  // V1.5.1 — Tags prédéfinis (chips toggleables au lieu d'input libre)
+  const PREDEFINED_TAGS = [
+    "player", "enemy", "boss", "npc",
+    "solid", "collectible", "harmful", "destructible",
+    "movable", "interactive", "trigger", "checkpoint",
+    "door", "key", "switch", "spawn",
+    "decoration", "background", "foreground", "ui"
+  ];
+
   // ---------------------------------------------------------------------------
   // STATE
   // ---------------------------------------------------------------------------
@@ -188,6 +197,10 @@
     renderForm();
     renderPreview();
     if (state.eventsExpanded) renderEventsBlock();
+    // V1.5.1 — sync l'object picker, library et capacity bar
+    if (typeof refreshObjectPicker === "function") refreshObjectPicker();
+    if (typeof populateLibrary === "function") populateLibrary();
+    if (typeof updateCapacityBar === "function") updateCapacityBar();
   }
 
   function renderList() {
@@ -217,14 +230,19 @@
           <span class="oe-card-id">ID ${String(o.id).padStart(2, "0")}</span>
         </div>
         <span class="oe-status oe-status-${statusCls}" title="${issues.map(i => i.msg).join(", ") || "Objet valide"}">${status}</span>
+        <button class="oe-card-del" title="Supprimer cet objet">×</button>
       `;
       card.onclick = () => { state.selectedId = o.id; refresh(); };
-      // Drag depuis la bibliothèque vers le map editor
       card.ondragstart = (e) => {
         e.dataTransfer.setData("application/x-luma-object", String(o.id));
         e.dataTransfer.effectAllowed = "copy";
       };
-      // Dessiner thumbnail
+      // Bouton suppression directe sur la card (sans passer par le formulaire)
+      const delBtn = card.querySelector(".oe-card-del");
+      delBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        deleteObject(o);
+      };
       drawCardThumb(card.querySelector("canvas"), o);
       listEl.appendChild(card);
     }
@@ -302,8 +320,12 @@
         <label>🎬 Animation</label>
         <select id="oeAnim">${animOptions}</select>
 
-        <label>Tags <span class="oe-hint">(séparés par virgule)</span></label>
-        <input type="text" id="oeTags" value="${o.tags.join(", ")}" placeholder="solid, collectible, harmful..." />
+        <label>Tags <span class="oe-hint">(clique pour activer/désactiver)</span></label>
+        <div id="oeTagsChips" class="oe-tags-chips">
+          ${PREDEFINED_TAGS.map(t =>
+            `<span class="oe-tag-chip${o.tags.includes(t) ? " active" : ""}" data-tag="${t}">${t}</span>`
+          ).join("")}
+        </div>
 
         <label>Solide (collision)</label>
         <div><label class="oe-switch"><input type="checkbox" id="oeSolid" ${o.solid ? "checked" : ""}/> <span>Collision activée</span></label></div>
@@ -322,16 +344,22 @@
     $$("oeSprite").onchange = (e) => {
       const v = e.target.value;
       o.spriteFrameId = v ? (isNaN(Number(v)) ? v : Number(v)) : null;
-      // si le frame a un ID numérique
       if (v && !isNaN(Number(v))) o.spriteFrameId = Number(v);
       else if (v) o.spriteFrameId = v;
       refresh();
     };
     $$("oeAnim").onchange = (e) => { o.animationId = e.target.value || null; refresh(); };
-    $$("oeTags").oninput = (e) => {
-      o.tags = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
-      renderPreview();
-    };
+    // V1.5.1 — tags chips
+    $$("oeTagsChips").querySelectorAll(".oe-tag-chip").forEach(chip => {
+      chip.onclick = () => {
+        const tag = chip.dataset.tag;
+        const idx = o.tags.indexOf(tag);
+        if (idx >= 0) o.tags.splice(idx, 1);
+        else o.tags.push(tag);
+        chip.classList.toggle("active");
+        renderPreview();
+      };
+    });
     $$("oeSolid").onchange = (e) => { o.solid = e.target.checked; renderPreview(); };
     $$("oeHp").oninput = (e) => { o.hp = Math.max(0, Number(e.target.value) || 0); renderPreview(); };
     $$("oeSpeed").oninput = (e) => { o.speed = Math.max(0, Number(e.target.value) || 0); renderPreview(); };
