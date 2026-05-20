@@ -237,6 +237,25 @@
         e.dataTransfer.setData("application/x-luma-object", String(o.id));
         e.dataTransfer.effectAllowed = "copy";
       };
+      // V1.5.2 — Accept drop d'un sprite depuis la library pour assigner spriteFrameId
+      card.ondragover = (e) => {
+        if (e.dataTransfer.types.includes("application/x-luma-frame")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          card.classList.add("oe-card-droptarget");
+        }
+      };
+      card.ondragleave = () => card.classList.remove("oe-card-droptarget");
+      card.ondrop = (e) => {
+        card.classList.remove("oe-card-droptarget");
+        const frameId = e.dataTransfer.getData("application/x-luma-frame");
+        if (!frameId) return;
+        e.preventDefault();
+        const num = Number(frameId);
+        o.spriteFrameId = isNaN(num) ? frameId : num;
+        state.selectedId = o.id;
+        refresh();
+      };
       // Bouton suppression directe sur la card (sans passer par le formulaire)
       const delBtn = card.querySelector(".oe-card-del");
       delBtn.onclick = (ev) => {

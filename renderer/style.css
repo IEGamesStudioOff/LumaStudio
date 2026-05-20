@@ -1036,3 +1036,64 @@ input[type="number"] { width: 60px; }
   background: #d22b3f;
   color: #fff;
 }
+
+/* =============================================================================
+   V1.5.2 — Suppression dans library, drop-target sur objets, fond sprite editor
+   ============================================================================= */
+
+/* Library item rows avec bouton × */
+.lib-item-row {
+  display: grid;
+  grid-template-columns: 1fr 22px;
+  gap: 2px;
+  align-items: stretch;
+}
+.lib-item-row > button:first-child {
+  border-right: 0;
+  margin: 0;
+}
+.lib-item-del {
+  background: #ffd0d6;
+  border: 1px solid #d22b3f;
+  color: #d22b3f;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 0;
+  cursor: pointer;
+  line-height: 1;
+}
+.lib-item-del:hover {
+  background: #d22b3f;
+  color: #fff;
+}
+
+/* Drop target sur les cards d'objet (drop d'un sprite pour assigner) */
+.oe-card-droptarget {
+  background: linear-gradient(90deg, #c8f7d0, #d4e3ff) !important;
+  outline: 3px dashed #1fa84a;
+  outline-offset: -3px;
+}
+
+/* Sprite editor : select fond + hint custom palette */
+.spe-bg-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  font-size: 11px;
+}
+.spe-bg-label select {
+  flex: 1;
+  background: #02061a;
+  color: var(--white, #fff);
+  border: 1px solid #5b7fff;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+.spe-hint {
+  font-size: 10px;
+  color: #888;
+  margin: 2px 0 6px;
+  line-height: 1.3;
+}
+.spe-hint strong { color: #4dff77; }

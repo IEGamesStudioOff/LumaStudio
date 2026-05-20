@@ -103,6 +103,7 @@
     showGrid: true,
     showPixelGrid: true,
     showCheckerboard: true,
+    bgMode: "checker",  // V1.5.2 : "checker" | "white" | "black"
     onionSkin: false,
 
     isDrawing: false,
@@ -626,8 +627,26 @@
     // V1.2 : on rend la composition de tous les layers visibles
     const composite = compositeAllLayers();
 
-    // checkerboard
-    if (state.showCheckerboard) {
+    // V1.5.2 — Fond selon bgMode (damier transparent / blanc / noir)
+    if (state.bgMode === "white") {
+      ctx.fillStyle = "#ffffff";
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          if (composite[y * state.w + x] === TRANSPARENT) {
+            ctx.fillRect(x0 + x * z, y0 + y * z, z, z);
+          }
+        }
+      }
+    } else if (state.bgMode === "black") {
+      ctx.fillStyle = "#000000";
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          if (composite[y * state.w + x] === TRANSPARENT) {
+            ctx.fillRect(x0 + x * z, y0 + y * z, z, z);
+          }
+        }
+      }
+    } else if (state.showCheckerboard) {
       for (let y = 0; y < state.h; y++) {
         for (let x = 0; x < state.w; x++) {
           if (composite[y * state.w + x] === TRANSPARENT) {
@@ -1452,6 +1471,13 @@
           <label class="spe-check"><input id="speGrid" type="checkbox" checked> Grille 8×8</label>
           <label class="spe-check"><input id="spePixelGrid" type="checkbox" checked> Pixel grid (zoom)</label>
           <label class="spe-check"><input id="speOnion" type="checkbox"> Onion skin</label>
+          <label class="spe-bg-label">Fond :
+            <select id="speBgMode">
+              <option value="checker">🏁 Damier (transparent)</option>
+              <option value="white">⬜ Blanc</option>
+              <option value="black">⬛ Noir</option>
+            </select>
+          </label>
           <h3>Frame</h3>
           <button class="spe-btn" id="speFlipH">Flip H</button>
           <button class="spe-btn" id="speFlipV">Flip V</button>
@@ -1487,7 +1513,8 @@
           <div class="spe-palette" id="spePalette"></div>
           <h3>Color Ramps</h3>
           <div class="spe-ramps" id="speRamps"></div>
-          <h3>Custom (RGB565)</h3>
+          <h3>🎨 Couleurs ST7735 personnalisées</h3>
+          <p class="spe-hint">Clique sur <strong>+</strong> pour ajouter n'importe quelle couleur (quantifiée RGB565). Clic droit pour retirer.</p>
           <div class="spe-palette" id="speCustomPalette"></div>
           <h3>Layers</h3>
           <div class="spe-layer-controls">
@@ -1557,6 +1584,10 @@
     $$("speGrid").onchange = () => { state.showGrid = $$("speGrid").checked; render(); };
     $$("spePixelGrid").onchange = () => { state.showPixelGrid = $$("spePixelGrid").checked; render(); };
     $$("speOnion").onchange = () => { state.onionSkin = $$("speOnion").checked; render(); };
+    if ($$("speBgMode")) {
+      $$("speBgMode").value = state.bgMode || "checker";
+      $$("speBgMode").onchange = () => { state.bgMode = $$("speBgMode").value; render(); };
+    }
 
     $$("speFlipH").onclick = flipH;
     $$("speFlipV").onclick = flipV;

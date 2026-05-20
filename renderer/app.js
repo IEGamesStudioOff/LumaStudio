@@ -350,13 +350,34 @@ function handleMapClick(event) {
 
   const tool = $("mapTool").value;
   const idx = ty * currentMap.width + tx;
-  const layerSel = $("paintLayer").value;
+  // V1.5.2 — source unique : le Layer actif de Scene Setup
+  const layer = $("sceneLayer") ? $("sceneLayer").value : "floor";
   const tileVal = Math.max(1, Math.min(7, Number($("tilePaintValue").value) || 1));
 
-  if (tool === "paint") currentMap.layers[layerSel][idx] = tileVal;
-  else if (tool === "erase") currentMap.layers[layerSel][idx] = 0;
-  else if (tool === "collision") currentMap.layers.collision[idx] = currentMap.layers.collision[idx] ? 0 : 1;
-  else if (tool === "spawn") {
+  if (tool === "paint") {
+    if (layer === "floor" || layer === "decor") {
+      currentMap.layers[layer][idx] = tileVal;
+    } else if (layer === "collision") {
+      currentMap.layers.collision[idx] = 1;
+    } else if (layer === "objects") {
+      $("hint").textContent = "⚠ Pour peindre des objets, change le Layer actif (Scene Setup) en Floor/Decor, ou utilise l'outil 📦 Placer objet.";
+      return;
+    }
+  } else if (tool === "erase") {
+    // V1.5.2 — la gomme efface le layer actif (floor, decor, ou collision)
+    if (layer === "floor" || layer === "decor") {
+      currentMap.layers[layer][idx] = 0;
+    } else if (layer === "collision") {
+      currentMap.layers.collision[idx] = 0;
+    } else if (layer === "objects") {
+      // Supprime tout objet placé sur ce tile
+      const ts = currentMap.tileSize;
+      currentScene.objects = currentScene.objects.filter(o =>
+        !(o.x >= tx * ts && o.x < (tx + 1) * ts && o.y >= ty * ts && o.y < (ty + 1) * ts));
+    }
+  } else if (tool === "collision") {
+    currentMap.layers.collision[idx] = currentMap.layers.collision[idx] ? 0 : 1;
+  } else if (tool === "spawn") {
     currentScene.playerSpawn.x = tx * currentMap.tileSize;
     currentScene.playerSpawn.y = ty * currentMap.tileSize;
   } else if (tool === "camera") {
@@ -375,12 +396,12 @@ function handleMapClick(event) {
     const picker = $("sceneObjectPicker");
     const pickedId = picker ? picker.value : "";
     if (!pickedId) {
-      $("hint").textContent = "⚠ Choisis un objet dans le menu déroulant à côté de l'outil avant de cliquer sur la map.";
+      $("hint").textContent = "⚠ Choisis un objet dans le menu déroulant avant de cliquer sur la map.";
       return;
     }
     const o = objects.find(o => String(o.id) === String(pickedId));
     if (!o) {
-      $("hint").textContent = "⚠ Objet introuvable. Crée-en un dans Objects.";
+      $("hint").textContent = "⚠ Objet introuvable.";
       return;
     }
     const f = frames.find(fr => fr.id === o.spriteFrameId);
@@ -912,7 +933,7 @@ function populateLibrary() {
     const btn = document.createElement("button");
     btn.textContent = `${String(f.id).slice(-4)} · ${f.name} (${f.w}×${f.h})`;
     btn.draggable = true;
-    btn.title = "Drag vers la map pour créer un objet, click pour éditer";
+    btn.title = "Drag vers la map ou un objet · click pour éditer";
     btn.ondragstart = (e) => e.dataTransfer.setData("application/x-luma-frame", String(f.id));
     btn.onclick = () => {
       if (window.LumaSpriteEditor) {
@@ -921,7 +942,7 @@ function populateLibrary() {
       }
     };
     return btn;
-  }, "Aucun sprite. Importe une image dans Sprite Editor.");
+  }, "Aucun sprite. Importe une image dans Sprite Editor.", (f) => deleteFrame(f));
 
   populateLibSection("libObjects", "libObjectsCount", objects, (o) => {
     const btn = document.createElement("button");
@@ -933,7 +954,7 @@ function populateLibrary() {
     btn.ondragstart = (e) => e.dataTransfer.setData("application/x-luma-object", String(o.id));
     btn.onclick = () => setMode("objects");
     return btn;
-  }, "Aucun objet. Crée-en un dans Objects/Events.");
+  }, "Aucun objet. Crée-en un dans Objects/Events.", (o) => deleteObjectFromLib(o));
 
   populateLibSection("libMaps", "libMapsCount", maps, (m) => {
     const btn = document.createElement("button");
@@ -962,7 +983,7 @@ function populateLibrary() {
   }, "Aucun event.");
 }
 
-function populateLibSection(divId, countId, items, makeBtn, emptyText) {
+function populateLibSection(divId, countId, items, makeBtn, emptyText, deleteFn) {
   const el = $(divId);
   if (!el) return;
   el.innerHTML = "";
@@ -971,10 +992,73 @@ function populateLibSection(divId, countId, items, makeBtn, emptyText) {
     el.textContent = emptyText;
   } else {
     el.className = "lib-list";
-    for (const item of items) el.appendChild(makeBtn(item));
+    for (const item of items) {
+      if (deleteFn) {
+        // V1.5.2 — Wrapper avec bouton × pour suppression
+        const row = document.createElement("div");
+        row.className = "lib-item-row";
+        const btn = makeBtn(item);
+        const del = document.createElement("button");
+        del.className = "lib-item-del";
+        del.textContent = "×";
+        del.title = "Supprimer";
+        del.onclick = (ev) => {
+          ev.stopPropagation();
+          deleteFn(item);
+        };
+        row.appendChild(btn);
+        row.appendChild(del);
+        el.appendChild(row);
+      } else {
+        el.appendChild(makeBtn(item));
+      }
+    }
   }
   const c = $(countId);
   if (c) c.textContent = items.length;
+}
+
+// V1.5.2 — Suppression sprite + détachement des objets qui le référencent
+function deleteFrame(f) {
+  const refsCount = objects.filter(o => o.spriteFrameId === f.id).length;
+  const msg = refsCount > 0
+    ? `Supprimer le sprite « ${f.name} » ? ${refsCount} objet(s) le référencent et perdront leur sprite.`
+    : `Supprimer le sprite « ${f.name} » ?`;
+  if (!confirm(msg)) return;
+  // Détache des objets
+  for (const o of objects) if (o.spriteFrameId === f.id) o.spriteFrameId = null;
+  // Retire du cache de rendu
+  for (const key of _spritePixelCache.keys()) {
+    if (key.startsWith(f.id + ":")) _spritePixelCache.delete(key);
+  }
+  const idx = frames.indexOf(f);
+  if (idx >= 0) frames.splice(idx, 1);
+  refreshAllLists();
+  updateCapacityBar();
+  drawFramesGrid();
+  if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
+  if (currentMap && currentScene) renderSceneEditor();
+  $("hint").textContent = `🗑 Sprite supprimé (${refsCount} objet(s) détaché(s)).`;
+}
+
+// V1.5.2 — Suppression objet depuis la library
+function deleteObjectFromLib(o) {
+  const refsInScene = currentScene && currentScene.objects
+    ? currentScene.objects.filter(i => i.objectId === o.id).length : 0;
+  const msg = refsInScene > 0
+    ? `Supprimer l'objet « ${o.name} » ? ${refsInScene} instance(s) placée(s) dans la scène seront aussi supprimées.`
+    : `Supprimer l'objet « ${o.name} » ?`;
+  if (!confirm(msg)) return;
+  const idx = objects.indexOf(o);
+  if (idx >= 0) objects.splice(idx, 1);
+  if (currentScene && currentScene.objects) {
+    currentScene.objects = currentScene.objects.filter(i => i.objectId !== o.id);
+  }
+  refreshAllLists();
+  updateCapacityBar();
+  if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
+  if (currentMap && currentScene) renderSceneEditor();
+  $("hint").textContent = `🗑 Objet supprimé.`;
 }
 
 // Peuple le menu déroulant "Objet à placer" dans la scene toolbar

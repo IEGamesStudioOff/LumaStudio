@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.5.1</title>
+  <title>Luma Studio v1.5.2</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
       <div class="splash-card">
         <img src="../assets/logo.png" alt="Luma Studio" />
         <h1>LUMA STUDIO</h1>
-        <p>v 1.5.1</p>
+        <p>v 1.5.2</p>
       </div>
     </section>
 
@@ -25,7 +25,7 @@
         <div class="dialog-title">
           <img src="../assets/logo.png" alt="">
           <strong>LUMA STUDIO</strong>
-          <span>v 1.5.1</span>
+          <span>v 1.5.2</span>
         </div>
         <div class="dialog-body">
           <div class="form-block">
@@ -60,7 +60,7 @@
       <header class="topbar">
         <div class="brand">
           <img src="../assets/logo.png" alt="Luma">
-          <strong>v 1.5.1</strong>
+          <strong>v 1.5.2</strong>
         </div>
         <div class="toolbar">
           <button id="resetMap" class="btn tiny">reset map</button>
@@ -131,18 +131,14 @@
               <div class="scene-toolbar">
                 <select id="mapTool">
                   <option value="paint">🎨 Peindre tile</option>
-                  <option value="erase">⌫ Effacer</option>
+                  <option value="erase">🧽 Gomme</option>
                   <option value="collision">🛑 Collision</option>
                   <option value="object">📦 Placer objet</option>
                   <option value="trigger">⚡ Trigger</option>
                   <option value="spawn">⭐ Spawn joueur</option>
                   <option value="camera">📷 Caméra</option>
                 </select>
-                <input id="tilePaintValue" type="number" min="1" max="7" value="1" title="Index tile à peindre">
-                <select id="paintLayer">
-                  <option value="floor">Floor</option>
-                  <option value="decor">Decor</option>
-                </select>
+                <input id="tilePaintValue" type="number" min="1" max="7" value="1" title="Index tile à peindre (1-7)">
                 <select id="sceneObjectPicker" class="object-picker" title="Objet à placer sur la map">
                   <option value="">— Aucun objet —</option>
                 </select>
@@ -255,7 +251,7 @@
       <!-- BOTTOMBAR -->
       <footer class="bottombar">
         <span id="hint">💡 Glisse un sprite ou un objet de la bibliothèque vers la map. Tous les placements d'un même ID = même objet.</span>
-        <span id="footRight">Luma Studio v1.5.1</span>
+        <span id="footRight">Luma Studio v1.5.2</span>
       </footer>
     </section>
   </main>
