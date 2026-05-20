@@ -1,11 +1,22 @@
 #include "luma_render.h"
 #include "luma_config.h"
+#include "luma_lpk.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include <string.h>
 
 static const char *TAG = "LUMA_RENDER";
+
+// V1.4 — Le LPK est ouvert dans main.c (s_assets). On y accède via cette
+// référence externe pour blitter les sprites d'objets à la volée.
+extern luma_lpk_t s_assets;
+extern bool s_assets_open;
+
+// Buffer temporaire pour décoder un sprite d'objet (max 32×32 = 2 Ko).
+// Au-delà : fallback rect coloré.
+#define OBJ_SPRITE_MAX_PIXELS 1024
+static uint16_t s_obj_sprite_buf[OBJ_SPRITE_MAX_PIXELS];
 static spi_device_handle_t s_lcd = NULL;
 
 static void lcd_cmd(uint8_t cmd) {
@@ -215,13 +226,25 @@ void luma_render_runtime(luma_runtime_t *rt) {
         }
     }
 
-    // Objets placés (rendu sommaire en attendant la liaison sprite/frame)
+    // V1.4 — Objets placés : blit du sprite depuis le LPK si dispo
     for (int i = 0; i < rt->object_count; i++) {
         const luma_object_instance_t *o = &rt->objects[i];
         if (!o->enabled) continue;
         int ox = o->x - rt->camera_x;
         int oy = o->y - rt->camera_y;
-        if (ox > -16 && ox < LUMA_LCD_WIDTH && oy > -16 && oy < LUMA_LCD_HEIGHT) {
+        if (ox <= -32 || ox >= LUMA_LCD_WIDTH || oy <= -32 || oy >= LUMA_LCD_HEIGHT) continue;
+
+        bool drawn = false;
+        if (s_assets_open && o->sprite_name[0] != 0
+            && (uint32_t)(o->sprite_w * o->sprite_h) <= OBJ_SPRITE_MAX_PIXELS) {
+            uint16_t w, h;
+            if (luma_lpk_read_sprite(&s_assets, o->sprite_name, &w, &h,
+                                     s_obj_sprite_buf, OBJ_SPRITE_MAX_PIXELS)) {
+                luma_render_blit_rgb565(ox, oy, w, h, s_obj_sprite_buf, 0xF81F);
+                drawn = true;
+            }
+        }
+        if (!drawn) {
             luma_render_rect(ox, oy, 14, 14, LUMA_CYAN);
         }
     }

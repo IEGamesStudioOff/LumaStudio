@@ -7,6 +7,33 @@ let objects = [];
 let events = [];
 let nextObjectId = 1;
 let nextEventId = 1;
+
+// V1.4 — Listes de référence pour le constructeur d'objets
+const OBJECT_TYPES = [
+  { id: "PLAYER",   label: "🧍 Player",   color: "#fff25a" },
+  { id: "ENEMY",    label: "👾 Enemy",    color: "#ff5e57" },
+  { id: "NPC",      label: "💬 NPC",      color: "#5fffaa" },
+  { id: "ITEM",     label: "🎁 Item",     color: "#5bd6ff" },
+  { id: "PROJECTILE", label: "⚡ Projectile", color: "#ffaa55" },
+  { id: "DECOR",    label: "🌿 Décor",    color: "#aa88ff" },
+  { id: "TRIGGER",  label: "🎯 Trigger",  color: "#888888" },
+  { id: "DOOR",     label: "🚪 Door",     color: "#cccccc" }
+];
+
+const OBJECT_BEHAVIORS = [
+  { id: "None",              label: "Aucun (statique)" },
+  { id: "PlatformerMovement",label: "🏃 Plateforme (jump+gravity)" },
+  { id: "TopDownMovement",   label: "🎮 Top-Down (4 directions)" },
+  { id: "FollowPlayer",      label: "👣 Suit le joueur" },
+  { id: "Patrol",            label: "↔ Patrouille horizontale" },
+  { id: "PatrolVertical",    label: "↕ Patrouille verticale" },
+  { id: "Bounce",            label: "🏀 Rebondit" },
+  { id: "Spinner",           label: "🔄 Tourne sur place" },
+  { id: "Pickup",            label: "💰 Ramassable" },
+  { id: "DialogueOnTouch",   label: "💬 Dialogue au contact" },
+  { id: "DamageOnTouch",     label: "💥 Inflige des dégâts" },
+  { id: "Door",              label: "🚪 Téléporte vers scène" }
+];
 let music = { name: "theme_01", tempo: 120, tracks: { A: [], B: [] } };
 let dialogues = [];
 let cutscenes = [];
@@ -65,6 +92,11 @@ function enterStudio(path, data = null) {
     if (scenes.length) currentScene = scenes[0];
     renderAll();
   }
+  // V1.4 — init des modules d'éditeurs visuels
+  setTimeout(() => {
+    if (window.LumaLibrary) window.LumaLibrary.init();
+    if (window.LumaObjectEditor) window.LumaObjectEditor.init();
+  }, 50);
 }
 
 document.querySelectorAll(".size-option").forEach((button) => {
@@ -258,17 +290,8 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} Mo`;
 }
 
-// V0.5 Logic
-$("addObject").addEventListener("click", () => {
-  objects.push({
-    id: nextObjectId++,
-    name: $("objName").value || "object",
-    type: $("objType").value,
-    tags: $("objTags").value.split(",").map(t => t.trim()).filter(Boolean),
-    behavior: $("objBehavior").value || "None"
-  });
-  renderObjects();
-});
+// V1.4 : tout le UI Object Editor est géré par object-editor.js (constructeur visuel).
+// L'ancien handler addObject basé sur des inputs texte a été retiré.
 
 $("addEvent").addEventListener("click", () => {
   events.push({
@@ -373,7 +396,10 @@ function renderList(id, items, map) {
   });
 }
 
-function renderObjects() { renderList("objectsList", objects, o => `<strong>${o.name}</strong><br>${o.type}<br>Behavior: ${o.behavior}<br>Tags: ${o.tags.join(", ")}`); }
+function renderObjects() {
+  // V1.4 : délégué à object-editor.js
+  if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
+}
 function renderEvents() { renderList("eventsList", events, e => `<strong>${e.name}</strong><br>IF ${e.condition}<br>THEN ${e.action} → ${e.target}`); }
 // V1.3 : music rendering géré par music-editor.js
 function renderDialogues() { renderList("dialoguesList", dialogues, d => `<strong>${d.id}</strong><br>${d.speaker}: ${d.text}<br>next: ${d.next || "-"}`); }
@@ -387,6 +413,7 @@ function renderAll() {
     window.LumaAnimEditor.setAnimations(animations);
   }
   if (window.LumaMusicEditor) window.LumaMusicEditor.refresh();
+  if (window.LumaLibrary) window.LumaLibrary.refresh();
   updateCapacityBar();
 }
 
@@ -477,6 +504,82 @@ $("playScenePreview").addEventListener("click", () => {
     centerCameraOnPlayer();
   }
   renderSceneEditor();
+});
+
+// V1.4 — Drag & drop d'objets depuis la bibliothèque vers la map
+mapCanvas.addEventListener("dragover", (e) => {
+  if (e.dataTransfer.types.includes("application/x-luma-object")
+   || e.dataTransfer.types.includes("application/x-luma-frame")) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    mapCanvas.classList.add("drop-target");
+  }
+});
+
+mapCanvas.addEventListener("dragleave", () => {
+  mapCanvas.classList.remove("drop-target");
+});
+
+mapCanvas.addEventListener("drop", (event) => {
+  event.preventDefault();
+  mapCanvas.classList.remove("drop-target");
+  if (!currentMap || !currentScene) return;
+
+  const rect = mapCanvas.getBoundingClientRect();
+  const scaleX = mapCanvas.width / rect.width;
+  const scaleY = mapCanvas.height / rect.height;
+  const px = Math.floor((event.clientX - rect.left) * scaleX);
+  const py = Math.floor((event.clientY - rect.top) * scaleY);
+  const tileSize = currentMap.tileSize;
+  const tx = Math.floor(px / tileSize);
+  const ty = Math.floor(py / tileSize);
+  if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return;
+
+  const objId = event.dataTransfer.getData("application/x-luma-object");
+  if (objId) {
+    const o = objects.find(o => String(o.id) === objId);
+    if (o) {
+      const f = frames.find(fr => fr.id === o.spriteFrameId);
+      currentScene.objects.push({
+        objectId: o.id,
+        instanceName: `${o.name}_${currentScene.objects.length + 1}`,
+        x: tx * tileSize,
+        y: ty * tileSize,
+        layer: "objects",
+        enabled: true,
+        variables: {},
+        w: f ? f.w : 16,
+        h: f ? f.h : 16
+      });
+      renderSceneEditor();
+    }
+    return;
+  }
+  // Frame seule droppée → on crée un objet minimal lié à cette frame
+  const frameId = event.dataTransfer.getData("application/x-luma-frame");
+  if (frameId) {
+    const f = frames.find(fr => String(fr.id) === frameId);
+    if (f) {
+      let obj = objects.find(o => o.spriteFrameId === f.id);
+      if (!obj) {
+        obj = {
+          id: nextObjectId++, name: f.name, type: "DECOR", behavior: "None",
+          tags: [], spriteFrameId: f.id, animationId: null, solid: false,
+          hp: 0, speed: 0, properties: {}
+        };
+        objects.push(obj);
+      }
+      currentScene.objects.push({
+        objectId: obj.id,
+        instanceName: `${obj.name}_${currentScene.objects.length + 1}`,
+        x: tx * tileSize, y: ty * tileSize,
+        layer: "objects", enabled: true, variables: {},
+        w: f.w, h: f.h
+      });
+      renderSceneEditor();
+      if (window.LumaLibrary) window.LumaLibrary.refresh();
+    }
+  }
 });
 
 mapCanvas.addEventListener("mousedown", (event) => {
@@ -720,13 +823,64 @@ function drawSpawn() {
   mapCtx.fillText("P", currentScene.playerSpawn.x + 3, currentScene.playerSpawn.y + 9);
 }
 
+// V1.4 : Cache des pixels d'image pour les sprites placés (évite décode répété)
+const _spritePixelCache = new Map();
+function getCachedSpritePixels(frame) {
+  if (!frame || !frame.pixelsB64) return null;
+  const key = frame.id + ":" + (frame.editedAt || 0);
+  if (_spritePixelCache.has(key)) return _spritePixelCache.get(key);
+  if (!window.LumaSpriteEditor) return null;
+  try {
+    const px = window.LumaSpriteEditor.base64ToPixels(frame.pixelsB64, frame.w * frame.h);
+    // Build ImageData
+    const img = mapCtx.createImageData(frame.w, frame.h);
+    for (let i = 0; i < px.length; i++) {
+      const c = px[i];
+      if (c === 0xF81F) { img.data[i * 4 + 3] = 0; continue; }
+      const r5 = (c >> 11) & 0x1F, g6 = (c >> 5) & 0x3F, b5 = c & 0x1F;
+      img.data[i * 4]     = (r5 << 3) | (r5 >> 2);
+      img.data[i * 4 + 1] = (g6 << 2) | (g6 >> 4);
+      img.data[i * 4 + 2] = (b5 << 3) | (b5 >> 2);
+      img.data[i * 4 + 3] = 255;
+    }
+    const tmp = document.createElement("canvas");
+    tmp.width = frame.w; tmp.height = frame.h;
+    tmp.getContext("2d").putImageData(img, 0, 0);
+    _spritePixelCache.set(key, tmp);
+    return tmp;
+  } catch (e) { return null; }
+}
+
 function drawPlacedObjects() {
+  if (!currentScene || !currentScene.objects) return;
   for (const obj of currentScene.objects) {
-    mapCtx.fillStyle = "#fff25a";
-    mapCtx.fillRect(obj.x, obj.y, 14, 14);
-    mapCtx.fillStyle = "#000";
-    mapCtx.font = "8px monospace";
-    mapCtx.fillText("O", obj.x + 4, obj.y + 10);
+    // V1.4 : trouve l'objet définition correspondant pour récupérer son sprite
+    const objDef = objects.find(o => o.id === obj.objectId);
+    let drawn = false;
+    if (objDef) {
+      const frame = frames.find(f => f.id === objDef.spriteFrameId);
+      const cv = getCachedSpritePixels(frame);
+      if (cv && frame) {
+        mapCtx.imageSmoothingEnabled = false;
+        mapCtx.drawImage(cv, obj.x, obj.y, frame.w, frame.h);
+        // Halo de sélection si tag "player"
+        if (objDef.type === "PLAYER") {
+          mapCtx.strokeStyle = "rgba(255,242,90,0.8)";
+          mapCtx.lineWidth = 1;
+          mapCtx.strokeRect(obj.x + 0.5, obj.y + 0.5, frame.w - 1, frame.h - 1);
+        }
+        drawn = true;
+      }
+    }
+    if (!drawn) {
+      // Fallback : carré avec ID
+      const typeInfo = (typeof OBJECT_TYPES !== "undefined") ? OBJECT_TYPES.find(t => t.id === (objDef && objDef.type)) : null;
+      mapCtx.fillStyle = typeInfo ? typeInfo.color : "#fff25a";
+      mapCtx.fillRect(obj.x, obj.y, 14, 14);
+      mapCtx.fillStyle = "#000";
+      mapCtx.font = "8px monospace";
+      mapCtx.fillText(objDef ? objDef.name.substring(0, 3).toUpperCase() : "?", obj.x + 1, obj.y + 10);
+    }
   }
 }
 

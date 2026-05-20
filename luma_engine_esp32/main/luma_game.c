@@ -4,6 +4,7 @@
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 static const char *TAG = "LUMA_GAME";
 static cJSON *s_game_json = NULL;
@@ -154,8 +155,44 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
         rt->active_map.tile_size = 16;
     }
 
-    ESP_LOGI(TAG, "Loaded scene: %s (map %dx%d, tile %d)",
-             rt->active_scene.id, rt->active_map.width, rt->active_map.height, rt->active_map.tile_size);
+    // V1.4 — Parse les instances d'objets placées dans la scène
+    rt->object_count = 0;
+    const cJSON *sceneObjs = cJSON_GetObjectItem(scene, "objects");
+    if (cJSON_IsArray(sceneObjs)) {
+        int n = cJSON_GetArraySize(sceneObjs);
+        if (n > LUMA_MAX_OBJECTS) n = LUMA_MAX_OBJECTS;
+        for (int i = 0; i < n; i++) {
+            const cJSON *o = cJSON_GetArrayItem(sceneObjs, i);
+            const cJSON *oid = cJSON_GetObjectItem(o, "objectId");
+            const cJSON *nm = cJSON_GetObjectItem(o, "instanceName");
+            const cJSON *ox = cJSON_GetObjectItem(o, "x");
+            const cJSON *oy = cJSON_GetObjectItem(o, "y");
+            const cJSON *en = cJSON_GetObjectItem(o, "enabled");
+            const cJSON *sn = cJSON_GetObjectItem(o, "spriteName");
+            const cJSON *sw = cJSON_GetObjectItem(o, "spriteW");
+            const cJSON *sh = cJSON_GetObjectItem(o, "spriteH");
+
+            luma_object_instance_t *dst = &rt->objects[rt->object_count];
+            if (cJSON_IsNumber(oid)) snprintf(dst->object_id, LUMA_MAX_NAME, "%d", oid->valueint);
+            else if (cJSON_IsString(oid)) strncpy(dst->object_id, oid->valuestring, LUMA_MAX_NAME - 1);
+            else dst->object_id[0] = 0;
+            if (cJSON_IsString(nm)) strncpy(dst->instance_name, nm->valuestring, LUMA_MAX_NAME - 1);
+            else dst->instance_name[0] = 0;
+            dst->x = cJSON_IsNumber(ox) ? (int16_t)ox->valueint : 0;
+            dst->y = cJSON_IsNumber(oy) ? (int16_t)oy->valueint : 0;
+            dst->layer = 0;
+            dst->enabled = cJSON_IsTrue(en) ? true : (en ? false : true);
+            if (cJSON_IsString(sn)) strncpy(dst->sprite_name, sn->valuestring, LUMA_MAX_NAME - 1);
+            else dst->sprite_name[0] = 0;
+            dst->sprite_w = cJSON_IsNumber(sw) ? (uint16_t)sw->valueint : 16;
+            dst->sprite_h = cJSON_IsNumber(sh) ? (uint16_t)sh->valueint : 16;
+            rt->object_count++;
+        }
+    }
+
+    ESP_LOGI(TAG, "Loaded scene: %s (map %dx%d, tile %d, %d objects)",
+             rt->active_scene.id, rt->active_map.width, rt->active_map.height,
+             rt->active_map.tile_size, rt->object_count);
     return true;
 }
 

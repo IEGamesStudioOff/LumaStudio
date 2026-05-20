@@ -18,8 +18,10 @@ static const char *TAG = "LUMA_MAIN";
 
 static luma_game_entry_t games[LUMA_MAX_GAMES];
 static luma_runtime_t runtime;
-static luma_lpk_t s_assets;
-static bool s_assets_open = false;
+// V1.4 — s_assets et s_assets_open non-static pour permettre l'accès
+// depuis luma_render.c (extern) pour blitter les sprites d'objets.
+luma_lpk_t s_assets;
+bool s_assets_open = false;
 
 static void draw_launcher(int game_count, int selected) {
     luma_render_clear(LUMA_BLACK);

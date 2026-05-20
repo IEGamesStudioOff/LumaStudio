@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.3</title>
+  <title>Luma Studio v1.4</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,7 +14,7 @@
       <div class="stars"></div>
       <div class="retro-panel splash-box">
         <img src="../assets/logo.png" alt="Luma Studio" class="logo" />
-        <p class="subtitle">LUMA STUDIO v1.3</p>
+        <p class="subtitle">LUMA STUDIO v1.4</p>
         <p class="loading">NARRATIVE ENGINE<span id="dots">...</span></p>
       </div>
     </section>
@@ -141,33 +141,7 @@
           </section>
 
           <section id="logicPanel" class="panel">
-            <div class="help-box"><strong>V0.5 :</strong> base objets/events. Crée les briques logiques du jeu.</div>
-            <div class="two-cols">
-              <section class="tool-panel">
-                <h2>Object Database</h2>
-                <input id="objName" placeholder="player, guard, red_door..." />
-                <select id="objType">
-                  <option>PLAYER</option><option>ENEMY</option><option>NPC</option><option>ITEM</option><option>PROJECTILE</option><option>DOOR</option><option>TRIGGER</option><option>BOSS</option>
-                </select>
-                <input id="objTags" placeholder="tags: solid, enemy, interactive" />
-                <input id="objBehavior" placeholder="behavior: TopDownMovement, EnemyPatrol..." />
-                <button id="addObject" class="primary full">AJOUTER OBJET</button>
-                <div id="objectsList" class="data-list"></div>
-              </section>
-              <section class="tool-panel">
-                <h2>Event Database</h2>
-                <input id="eventName" placeholder="open_red_door" />
-                <select id="eventCondition">
-                  <option>On Start Scene</option><option>On Button Pressed</option><option>On Collision</option><option>On Interact</option><option>On Variable Equals</option><option>On Timer</option><option>On Dialogue Finished</option><option>On Enter Zone</option>
-                </select>
-                <select id="eventAction">
-                  <option>Start Dialogue</option><option>Change Scene</option><option>Give Item</option><option>Set Variable</option><option>Spawn Object</option><option>Destroy Object</option><option>Play Sound</option><option>Play Cutscene</option>
-                </select>
-                <input id="eventTarget" placeholder="target: intro_01, lab_02..." />
-                <button id="addEvent" class="primary full">AJOUTER EVENT</button>
-                <div id="eventsList" class="data-list"></div>
-              </section>
-            </div>
+            <!-- V1.4 : contenu généré par object-editor.js (constructeur visuel) -->
           </section>
 
           <section id="animationPanel" class="panel">
@@ -421,6 +395,8 @@
   <script src="gif-encoder.js"></script>
   <script src="animation-editor.js"></script>
   <script src="music-editor.js"></script>
+  <script src="object-editor.js"></script>
+  <script src="library-browser.js"></script>
   <script src="simulator.js"></script>
 </body>
 </html>

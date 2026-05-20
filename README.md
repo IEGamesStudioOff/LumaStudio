@@ -1,117 +1,108 @@
-# Luma Studio v1.3
+# Luma Studio v1.4
 
 Éditeur rétro Electron + base runtime ESP32 pour créer des jeux Luma.
 
-## Nouveautés V1.3
+## Nouveautés V1.4 — Refonte ergonomique majeure
 
-### 🎹 Music Editor refondu — Piano Roll
-Refonte complète de l'éditeur musique. Plus de boutons "addNote" séquentiels —
-maintenant tu composes visuellement sur une grille piano.
+Le système Objects/Events était trop abstrait pour des créateurs débutants.
+V1.4 le transforme en un véritable outil visuel inspiré de Construct 3,
+NESmaker, RPG Maker et Game Builder Garage.
 
-**Grille piano roll** :
-- **3 octaves visibles** (C3 → B5), 36 lignes (touches blanches et noires
-  alternées comme un vrai piano).
-- **4 à 64 steps** ajustables au slider (1 step = 1/16ème de noir).
-- **Click sur une case** = active/désactive la note correspondante. Avec
-  pré-écoute audio courte au clic pour entendre ce que tu poses.
-- **Lignes de beat** (toutes les 4 steps) et **lignes de bar** (toutes
-  les 16 steps) pour repérage visuel.
+### 📚 Bibliothèque permanente (gauche)
 
-**Deux pistes parallèles** (BUZZER A mélodie + BUZZER B basse/harmonie),
-chacune avec :
-- Couleur de notes propre (vert pour A, jaune pour B).
-- **Checkbox 🔁 Loop A / Loop B** indépendantes — tu peux jouer une boucle
-  d'ambiance en A pendant que B joue un one-shot.
-- Indicateur de note en cours pendant la lecture.
+Un explorateur de ressources visible en permanence affiche toutes les
+catégories du jeu :
 
-**Aiguille de lecture animée** : un trait vertical rouge avance step par
-step pendant le play, scroll horizontal automatique si la séquence est plus
-large que l'écran.
+- 🎨 Sprites
+- 🎬 Animations
+- 📦 Objets
+- 🎵 Musique
+- 💬 Dialogues
+- 🗺 Maps
+- 🎬 Cutscenes
+- ⚡ Events
 
-**9 presets sonores** :
-- 🎶 Main Theme (120 BPM, 32 steps, loop)
-- 👹 Boss Theme (160 BPM, 32 steps, loop)
-- 🌃 Décor / Ambient (60 BPM, 32 steps, loop)
-- 🔫 Blaster SFX (240 BPM, 8 steps, once)
-- 💥 Explosion (200 BPM, 12 steps, once)
-- 🪙 Pickup / Coin (240 BPM, 4 steps, once)
-- ↑ Jump (240 BPM, 6 steps, once)
-- ⚡ Hit / Damage (240 BPM, 4 steps, once)
-- 🆕 Vierge
+Chaque catégorie est repliable, avec un compteur d'éléments. Chaque item
+affiche une **thumbnail RGB565 réelle** (pas un placeholder), son nom, et
+des métadonnées (dimensions, BPM, frame count selon le type).
 
-Chaque preset pose un canevas de notes pour démarrer, à toi de modifier.
+**Actions disponibles** sur chaque item :
+- ✎ Renommer
+- ⎘ Dupliquer
+- × Supprimer
+- Drag handle pour drag-and-drop
+- Click sur le nom = ouvre l'éditeur correspondant
 
-**Contrôles** :
-- ▶ PLAY / ⏸ PAUSE
-- ■ STOP
-- ⏮ Rewind (retour début)
-- 🗑 Clear A+B
+**Search bar** en haut filtre instantanément toutes les catégories.
 
-**Stats live** : nombre de notes par track, durée totale, taille en octets
-estimée, BPM, steps, loop status.
+### 🎯 Object Editor — constructeur visuel 3 colonnes
 
-**Audio** : Web Audio API avec **oscillateurs square wave** (forme d'onde
-authentique d'un buzzer piézo passif, pas un sinus lisse). Chaque buzzer
-est strictement monophonique comme sur le hardware.
+Plus aucun ID manuel à retenir. Plus de noms d'animations à recopier.
 
-### ▶ Simulateur console (bouton vert en haut à gauche)
-Un bouton **▶ SIMULER** visible en permanence dans le header lance une
-simulation haute fidélité de la console Luma.
+**Colonne gauche — Liste des objets** :
+- Thumbnail RGB565 réelle de chaque objet
+- Badge de status ✓ valide / ⚠ attention / ✖ invalide
+- ID auto-incrémenté affiché (01, 02, 03...)
+- Bouton + AJOUTER en haut
+- Section Events compacte en bas (toggleable)
 
-**Ce que ça reproduit fidèlement** :
-- **Écran ST7735 160×128 RGB565** rendu pixel-perfect (×4 scale visuel,
-  aucun antialiasing, palette identique au moteur C).
-- **Effet matrice LCD** : léger striping horizontal pour suggérer la
-  structure subpixel du panneau ST7735.
-- **30 FPS stable** (= `vTaskDelay(33ms)` du moteur ESP32).
-- **2 buzzers piézo** en square wave Web Audio (vraie forme d'onde
-  électroniquement carrée, harmoniques impaires incluses), strictement
-  monophoniques.
-- **Logique runtime miroir du moteur ESP32** : collision 4 coins avec
-  sliding X/Y séparé, caméra clampée 4 bords, rendu tile palette identique.
-- **Sprite RGB565** du joueur si tu en as édité un dans le sprite editor
-  (premier sprite trouvé = sprite joueur, comme côté ESP32).
-- **Musique du projet** jouée en boucle avec loop A/B indépendants.
+**Colonne centrale — Formulaire de l'objet** :
+- Nom (input)
+- ID auto (readonly)
+- Type (dropdown : 🧍 Player / 👾 Enemy / 💬 NPC / 🎁 Item / ⚡ Projectile / 🌿 Décor / 🎯 Trigger / 🚪 Door)
+- Behavior (dropdown : Aucun / 🏃 Plateforme / 🎮 Top-Down / 👣 Suit le joueur / ↔ Patrol / ↕ PatrolVertical / 🏀 Bounce / 🔄 Spinner / 💰 Pickup / 💬 DialogueOnTouch / 💥 DamageOnTouch / 🚪 Door)
+- 🎨 Sprite (dropdown des frames existantes avec dimensions)
+- 🎬 Animation (dropdown des animations existantes avec frame count)
+- Tags (input avec hint)
+- ☑ Solide / collision
+- HP (number)
+- Vitesse (number)
 
-**Inputs** :
-- ⬅⬇⬆➡ (ou ZQSD/WASD) : déplacement
-- Z : bouton A (dialogue)
-- X : bouton B (fermer dialogue)
-- ESC : quitter le simulateur
+Tout est **lié visuellement** : choisir un sprite met à jour la preview
+instantanément, choisir un behavior met à jour le banner de validation.
 
-**Honest disclaimer** : ce n'est pas une émulation cycle-accurate du
-binaire ESP32 (ça demanderait QEMU/Renode). C'est une simulation qui
-fait tourner la même logique JS du studio en respectant fidèlement les
-contraintes hardware. Le rendu visuel et le comportement sont identiques
-à ce que tu verras sur la console réelle.
+**Colonne droite — Preview live** :
+- Canvas 160×160 avec damier de transparence
+- **Sprite animé en temps réel** si une animation est associée
+- Hitbox rouge si l'objet est solide
+- Banner status global ✓ VALIDE / ⚠ ATTENTION / ✖ INVALIDE
+- Liste des issues détectées (sprite manquant, animation supprimée, etc.)
+- Tableau de détails : ID, Nom, Type, Behavior, Sprite, Animation, Solide, HP, Vitesse, Tags, Mémoire estimée
 
-**Padd virtuel à l'écran** (cliquable / tactile) pour tester sans clavier.
+### 🗺 Drag-and-drop dans le Map Editor
 
-**FPS counter + position joueur + position caméra** affichés en live dans
-la barre verte du haut.
+Plus de placeholders carrés. Plus d'IDs à taper manuellement.
 
-### 📦 Capacity Bar live
-Un grand rectangle bleu en haut de chaque panneau affiche en permanence :
-- **Taille actuelle / taille max** du projet (ex: "234.5 Ko / 550 Ko (43%)").
-- **Barre de progression** verte / jaune / rouge selon le pourcentage.
-- **Marker rouge à 80%** pour alerte visuelle.
-- **Breakdown live** : 🎨 sprites · 🎵 audio · 🗺 maps · ⚙ code.
+- Glisse un objet depuis la bibliothèque (ou depuis la liste de l'object editor) directement sur la map
+- Le **vrai sprite RGB565** apparaît immédiatement à la position du drop, snappé sur la grille de tiles
+- Glisse aussi des sprites bruts : un objet « décor » est créé automatiquement à partir du sprite
+- Feedback visuel pendant le drag : outline vert pulsant sur la map
+- Outline jaune autour des objets de type PLAYER pour repérage immédiat
 
-Mise à jour en temps réel à chaque action : édition d'une frame, ajout
-d'une note de musique, création d'une map, etc.
+### ⚙ Moteur ESP32 mis à jour
 
-## Côté PC / Electron — fonctionnalités cumulatives
+Le format `luma_object_instance_t` côté C est étendu avec `sprite_name`,
+`sprite_w`, `sprite_h`. Le binding objet ↔ sprite est résolu côté Studio
+au moment du build (`makeGameLuma`), donc le moteur ESP32 lit directement
+le nom du sprite à blitter et n'a pas à faire de double-lookup.
+
+- `luma_game.c` parse `scenes[].objects[]` et remplit `rt->objects[]`
+- `luma_render.c` blit le sprite de chaque objet depuis le LPK avec un
+  buffer temporaire de 32×32 max (= 2 Ko partagés)
+- Fallback rect cyan si le sprite n'existe pas ou est trop gros
+
+## Fonctionnalités cumulatives
 
 - V0.4 Project Manager
-- V0.5 Object & Event Database
+- **V1.4 Library Browser permanent + Object Editor visuel + Drag-and-drop map**
 - V1.1 Sprite Editor pixel-art + V1.2 Layers
 - V1.1 Animation Editor + V1.2 Export GIF
-- **V1.3 Music Editor Piano Roll** (refonte complète)
+- V1.3 Music Editor Piano Roll
 - V1.0 Dialogues / Cutscenes
-- V1.0 Map / Scene Editor
-- V1.0 Build / Export Pipeline + V1.2 LPK sprite-aware
-- **V1.3 Console Simulator** (bouton ▶ SIMULER en haut à gauche)
-- **V1.3 Capacity Bar live** dans le header
+- V1.0 Map / Scene Editor + **V1.4 sprites réels affichés**
+- V1.0 Build / Export Pipeline + V1.2 LPK sprite-aware + V1.4 binding auto
+- V1.3 Console Simulator
+- V1.3 Capacity Bar live
 
 Lancer l'éditeur :
 
@@ -120,23 +111,26 @@ npm install
 npm start
 ```
 
-## Moteur ESP32 — `luma_engine_esp32/`
+## Workflow type V1.4
 
-Inchangé depuis V1.2 :
-- launcher `/sdcard/jeux/` + lecture `manifest.json`
-- chargement `game.luma` (couches floor/decor/collision en RAM)
-- collision joueur ↔ tiles + clamp caméra 4 bords
-- ouverture LPK + lecture sprites RGB565
-- rendu sprite joueur depuis LPK
-- audio piezo 2 canaux non-bloquant (2 timers LEDC indépendants)
-- save FAT-safe
+1. Importer une image dans **Asset Lab**, la découper en frames
+2. Ouvrir une frame dans le **Sprite Editor** (bouton ✎ EDIT sur la card) et la dessiner pixel par pixel
+3. Aller dans **Animations**, créer une animation avec plusieurs frames
+4. Aller dans **OBJECTS / EVENTS**, cliquer **+ AJOUTER** : un objet vide
+5. Lui donner un nom, un type, choisir le sprite + l'animation dans les dropdowns, configurer behavior + tags + solide
+6. Le preview à droite valide l'objet en live
+7. Aller dans **Map / Scene Editor**, **glisser l'objet** depuis la bibliothèque vers la map
+8. Cliquer **▶ SIMULER** pour tester sur la console virtuelle
+9. **SAUVEGARDER** puis exporter le `.luma` final pour la console réelle
 
-## Limitations connues V1.3
+## Limitations connues V1.4
 
-- Le simulateur n'exécute pas le binaire ESP-IDF ; il reproduit la logique
-  du moteur en JS. Pour une émulation cycle-accurate, il faudrait QEMU
-  ou Renode (hors scope studio).
-- Le music editor utilise une "duration = 1 step" simple (pas encore de
-  notes tenues sur plusieurs cellules). Une V1.4 pourrait ajouter ça.
-- Le breakdown de la capacity bar est estimatif (les fichiers réels
-  binaires post-compilation peuvent varier de ±10%).
+- L'animation d'objet sur ESP32 (frame-by-frame depuis un `animationId`) est
+  préparée côté C mais le runtime n'avance pas encore le timing — viendra
+  en V1.5.
+- Pas encore de **rotation** ou **scale** des objets placés (V1.5).
+- Pas encore d'**aimant aux tiles** ni d'**alignement précis sub-tile** —
+  le drop snap sur la grille du tilesize.
+- Buffer sprite ESP32 limité à 32×32 par objet (= 2 Ko). Au-delà : fallback
+  rect cyan. Suffisant pour 90% des cas, mais un système de cache LRU
+  permettrait des sprites 64×64 en V1.5.

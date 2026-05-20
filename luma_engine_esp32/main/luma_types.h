@@ -41,6 +41,11 @@ typedef struct {
     int16_t y;
     uint8_t layer;
     bool enabled;
+    // V1.4 — référence directe au sprite à afficher (résolue au build LPK)
+    // Si vide ou non-trouvé dans le LPK, on tombe sur un placeholder coloré.
+    char sprite_name[LUMA_MAX_NAME];
+    uint16_t sprite_w;
+    uint16_t sprite_h;
 } luma_object_instance_t;
 
 typedef struct {

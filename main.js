@@ -12,7 +12,7 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 720,
-    title: "Luma Studio v1.3",
+    title: "Luma Studio v1.4",
     backgroundColor: "#020617",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -102,7 +102,7 @@ ipcMain.handle("project:create", async (_event, project) => {
   ensureProjectFolders(projectDir);
 
   const config = {
-    lumaStudioVersion: "1.3.0",
+    lumaStudioVersion: "1.4.0",
     projectName: project.name,
     editorName: project.editor,
     gameSize: project.size,
@@ -483,6 +483,32 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
   const maps = readJsonSafe(path.join(projectDir, "maps", "maps.json"), []);
   const scenes = readJsonSafe(path.join(projectDir, "scenes", "scenes.json"), []);
 
+  // V1.4 — Enrichir chaque instance d'objet placée dans une scène avec le nom
+  // du sprite à blitter sur ESP32, résolu en parcourant objects[].spriteFrameId
+  // → frames[].id → nom de fichier dans le LPK (sprites/<frame_id>.spr).
+  const frameById = new Map(frames.map(f => [f.id, f]));
+  const objectById = new Map(objects.map(o => [o.id, o]));
+  for (const sc of scenes) {
+    if (!Array.isArray(sc.objects)) continue;
+    for (const inst of sc.objects) {
+      const obj = objectById.get(inst.objectId);
+      if (!obj) continue;
+      const frame = frameById.get(obj.spriteFrameId);
+      if (frame && frame.pixelsB64) {
+        inst.spriteName = "sprites/" + frame.id + ".spr";
+        inst.spriteW = frame.w;
+        inst.spriteH = frame.h;
+      }
+      // animation : on garde le tag pour V1.5 (multi-frame animé sur console)
+      if (obj.animationId) inst.animationId = obj.animationId;
+      inst.type = obj.type;
+      inst.behavior = obj.behavior;
+      inst.solid = !!obj.solid;
+      inst.hp = obj.hp || 0;
+      inst.speed = obj.speed || 0;
+    }
+  }
+
   const gameData = {
     magic: "LUMA_GAME_V1",
     config,
@@ -602,7 +628,7 @@ ipcMain.handle("build:game-v09", async (_event, options) => {
   const manifest = {
     name: config.projectName || gameName,
     editor: config.editorName || "Unknown",
-    version: "1.3.0",
+    version: "1.4.0",
     type: "luma_game",
     entry: gameFile,
     assets: assetsFile,
