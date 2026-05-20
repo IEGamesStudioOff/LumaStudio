@@ -290,19 +290,9 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} Mo`;
 }
 
-// V1.4 : tout le UI Object Editor est géré par object-editor.js (constructeur visuel).
-// L'ancien handler addObject basé sur des inputs texte a été retiré.
-
-$("addEvent").addEventListener("click", () => {
-  events.push({
-    id: nextEventId++,
-    name: $("eventName").value || "event",
-    condition: $("eventCondition").value,
-    action: $("eventAction").value,
-    target: $("eventTarget").value
-  });
-  renderEvents();
-});
+// V1.4 : tout le UI Object Editor + Events est géré par object-editor.js.
+// L'ancien handler addEvent basé sur des inputs texte a été retiré (l'élément
+// #addEvent et ses champs associés n'existent plus dans le DOM).
 
 // V0.6 Music
 // V1.3 : tout le music UI est géré par music-editor.js (piano roll).
@@ -387,6 +377,7 @@ $("saveAll").addEventListener("click", async () => {
 
 function renderList(id, items, map) {
   const el = $(id);
+  if (!el) return;  // V1.4.1 — robuste : on ignore si l'élément a été retiré du DOM
   el.innerHTML = "";
   items.forEach((item) => {
     const div = document.createElement("div");
@@ -400,7 +391,10 @@ function renderObjects() {
   // V1.4 : délégué à object-editor.js
   if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
 }
-function renderEvents() { renderList("eventsList", events, e => `<strong>${e.name}</strong><br>IF ${e.condition}<br>THEN ${e.action} → ${e.target}`); }
+function renderEvents() {
+  // V1.4 : eventsList retiré du DOM, désormais affiché dans l'object-editor
+  if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
+}
 // V1.3 : music rendering géré par music-editor.js
 function renderDialogues() { renderList("dialoguesList", dialogues, d => `<strong>${d.id}</strong><br>${d.speaker}: ${d.text}<br>next: ${d.next || "-"}`); }
 function renderCutSteps() { renderList("cutSteps", currentCutSteps, s => `<strong>${s.time}s</strong> ${s.action}<br>${s.target} ${s.value}`); }
