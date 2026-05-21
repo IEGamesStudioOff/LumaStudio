@@ -360,6 +360,52 @@ $("resizeMap").addEventListener("click", () => {
     return;
   }
   if (!confirm(`Redimensionner la map de ${currentMap.width}×${currentMap.height} à ${newW}×${newH} ? Les tiles dans la zone commune sont préservées.`)) return;
+  doResizeMap(newW, newH);
+});
+
+$("showGrid").addEventListener("change", () => renderSceneEditor());
+$("bgColor").addEventListener("input", () => renderSceneEditor());
+// V1.5.5 — hint contextuel quand on change de layer
+if ($("sceneLayer")) {
+  $("sceneLayer").addEventListener("change", () => updateSceneHint());
+}
+
+// V1.5.6+ — Auto-resize : quand l'utilisateur change W ou H dans Scene Setup
+// (et qu'une map existe), proposer immédiatement un redimensionnement avec
+// confirmation, plutôt que d'attendre qu'il clique sur le bouton.
+function _proposeResize() {
+  if (!currentMap) return;
+  const newW = Math.max(10, Number($("mapW").value) || currentMap.width);
+  const newH = Math.max(8,  Number($("mapH").value) || currentMap.height);
+  if (newW === currentMap.width && newH === currentMap.height) return;
+  if (confirm(`Redimensionner la map de ${currentMap.width}×${currentMap.height} à ${newW}×${newH} ?\n(Les tiles déjà peintes dans la zone commune sont préservées.)`)) {
+    doResizeMap(newW, newH);
+  } else {
+    // Annulé : remet les valeurs originales
+    $("mapW").value = currentMap.width;
+    $("mapH").value = currentMap.height;
+  }
+}
+$("mapW").addEventListener("change", _proposeResize);
+$("mapH").addEventListener("change", _proposeResize);
+
+// V1.5.6+ — Hint contextuel selon l'outil principal
+if ($("mapTool")) {
+  $("mapTool").addEventListener("change", () => {
+    const tool = $("mapTool").value;
+    const hints = {
+      paint:   "💡 Paint : le Layer actif décide quoi peindre. Crayon/Seau/Rect/Cercle/Gomme.",
+      trigger: "💡 Trigger : clic pour ajouter, RE-CLIC sur le même tile pour retirer.",
+      spawn:   "💡 Spawn : clic = position de départ du joueur (rect vert P).",
+      camera:  "💡 Caméra : clic = recentre la fenêtre 160×128 du jeu sur ce point."
+    };
+    if ($("hint") && hints[tool]) $("hint").textContent = hints[tool];
+  });
+}
+
+// Logique commune de redimensionnement extraite (appelable depuis le bouton OU change)
+function doResizeMap(newW, newH) {
+  if (!currentMap) return;
   const oldW = currentMap.width, oldH = currentMap.height;
   const minW = Math.min(oldW, newW), minH = Math.min(oldH, newH);
   for (const layerName of ["floor", "decor", "collision"]) {
@@ -374,24 +420,31 @@ $("resizeMap").addEventListener("click", () => {
   }
   currentMap.width = newW;
   currentMap.height = newH;
-  // Cull les objets hors limites
+  // Cull les objets/triggers hors limites
   if (currentScene && currentScene.objects) {
     const ts = currentMap.tileSize;
-    const before = currentScene.objects.length;
+    const beforeO = currentScene.objects.length;
+    const beforeT = (currentScene.triggers || []).length;
     currentScene.objects = currentScene.objects.filter(o => o.x < newW * ts && o.y < newH * ts);
-    const removed = before - currentScene.objects.length;
-    if (removed > 0) $("hint").textContent = `↔ Map ${newW}×${newH} · ${removed} objet(s) hors limites supprimé(s).`;
-    else $("hint").textContent = `↔ Map redimensionnée à ${newW}×${newH} sans perte.`;
+    if (currentScene.triggers) {
+      currentScene.triggers = currentScene.triggers.filter(t => t.x < newW * ts && t.y < newH * ts);
+    }
+    const removedO = beforeO - currentScene.objects.length;
+    const removedT = beforeT - (currentScene.triggers || []).length;
+    let msg = `↔ Map redimensionnée ${oldW}×${oldH} → ${newW}×${newH}.`;
+    if (removedO || removedT) msg += ` ${removedO} objet(s) + ${removedT} trigger(s) hors limites supprimés.`;
+    $("hint").textContent = msg;
+  } else {
+    $("hint").textContent = `↔ Map redimensionnée ${oldW}×${oldH} → ${newW}×${newH}.`;
   }
   renderSceneEditor();
+  // Flash vert pour signaler le redimensionnement
+  if (mapCanvas) {
+    mapCanvas.style.outline = "4px solid #4dff77";
+    setTimeout(() => { mapCanvas.style.outline = ""; }, 500);
+  }
   updateCapacityBar();
-});
-
-$("showGrid").addEventListener("change", () => renderSceneEditor());
-$("bgColor").addEventListener("input", () => renderSceneEditor());
-// V1.5.5 — hint contextuel quand on change de layer
-if ($("sceneLayer")) {
-  $("sceneLayer").addEventListener("change", () => updateSceneHint());
+  renderScenesList();
 }
 
 $("toggleCamera").addEventListener("click", () => {
@@ -630,12 +683,26 @@ function handleMapClick(event) {
     camera.x = Math.max(0, Math.min(Math.max(0, mapPxW - camera.w), px - camera.w / 2));
     camera.y = Math.max(0, Math.min(Math.max(0, mapPxH - camera.h), py - camera.h / 2));
   } else if (tool === "trigger") {
-    currentScene.triggers.push({
-      id: "trigger_" + Date.now(),
-      x: tx * currentMap.tileSize, y: ty * currentMap.tileSize,
-      w: currentMap.tileSize, h: currentMap.tileSize,
-      action: "Start Dialogue", target: ""
+    // V1.5.6+ — Toggle : si un trigger existe déjà à cet endroit, on le retire ;
+    // sinon on en ajoute un nouveau. Plus simple que de chercher comment supprimer.
+    const ts = currentMap.tileSize;
+    const existing = (currentScene.triggers || []).filter(t => {
+      const tx0 = Math.floor(t.x / ts), ty0 = Math.floor(t.y / ts);
+      return tx0 === tx && ty0 === ty;
     });
+    if (existing.length > 0) {
+      currentScene.triggers = currentScene.triggers.filter(t => !existing.includes(t));
+      $("hint").textContent = `🗑 ${existing.length} trigger(s) retiré(s) du tile (${tx},${ty}).`;
+    } else {
+      currentScene.triggers = currentScene.triggers || [];
+      currentScene.triggers.push({
+        id: "trigger_" + Date.now(),
+        x: tx * currentMap.tileSize, y: ty * currentMap.tileSize,
+        w: currentMap.tileSize, h: currentMap.tileSize,
+        action: "Start Dialogue", target: ""
+      });
+      $("hint").textContent = `⚡ Trigger ajouté en (${tx},${ty}). Re-clique pour retirer.`;
+    }
   }
   renderSceneEditor();
   updateCapacityBar();
@@ -672,15 +739,25 @@ function placeObjectAt(tx, ty) {
 // V1.5.5 — Efface les objets dont le tile (tx,ty) est inclus dans leur bounding box.
 // Si l'objet était "solid", on retire la collision auto, mais SEULEMENT si aucun
 // autre objet solid restant n'occupe ce tile (la collision manuelle est préservée).
+// V1.5.6+ : retire aussi les triggers à ce tile (gomme tout ce qui n'est pas tile peint)
 function eraseObjectsAtTile(tx, ty) {
   if (!currentScene || !currentMap) return;
   const ts = currentMap.tileSize;
   const toRemove = currentScene.objects.filter(inst => tileInInstance(inst, tx, ty, ts));
-  if (toRemove.length === 0) {
-    $("hint").textContent = "Aucun objet sur ce tile.";
+  // Triggers à ce tile
+  let removedTriggers = 0;
+  if (currentScene.triggers) {
+    const before = currentScene.triggers.length;
+    currentScene.triggers = currentScene.triggers.filter(t => {
+      const tx0 = Math.floor(t.x / ts), ty0 = Math.floor(t.y / ts);
+      return !(tx0 === tx && ty0 === ty);
+    });
+    removedTriggers = before - currentScene.triggers.length;
+  }
+  if (toRemove.length === 0 && removedTriggers === 0) {
+    $("hint").textContent = "Rien à effacer sur ce tile.";
     return;
   }
-  // Désactive d'abord la collision auto de ceux qui partent
   for (const inst of toRemove) {
     const obj = objects.find(o => o.id === inst.objectId);
     if (obj && obj.tags && obj.tags.includes("solid")) {
@@ -688,7 +765,10 @@ function eraseObjectsAtTile(tx, ty) {
     }
   }
   currentScene.objects = currentScene.objects.filter(inst => !toRemove.includes(inst));
-  $("hint").textContent = `🗑 ${toRemove.length} objet(s) retiré(s) du tile (${tx},${ty}).`;
+  const msg = [];
+  if (toRemove.length) msg.push(`${toRemove.length} objet(s)`);
+  if (removedTriggers) msg.push(`${removedTriggers} trigger(s)`);
+  $("hint").textContent = `🗑 Retiré : ${msg.join(" + ")} en (${tx},${ty}).`;
 }
 
 function tileInInstance(inst, tx, ty, ts) {
