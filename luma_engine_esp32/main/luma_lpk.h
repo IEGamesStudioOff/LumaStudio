@@ -30,3 +30,10 @@ bool luma_lpk_read_asset(luma_lpk_t *pack, const char *name, uint8_t *buffer, ui
 bool luma_lpk_read_sprite(luma_lpk_t *pack, const char *name,
                           uint16_t *out_w, uint16_t *out_h,
                           uint16_t *pixels, uint32_t max_pixels);
+
+// V1.5.4 : lit un tileset compilé.
+// Format binaire : "LTS1" magic (4B) | cols u16 LE | rows u16 LE | tileSize u16 LE
+//                 | cols*rows*tileSize*tileSize*2 bytes RGB565 BE
+// Remplit la struct out (alloue le buffer interne pixels en RAM).
+// Convertit BE → LE pour usage natif ESP32. Magenta 0xF81F = transparent.
+bool luma_lpk_read_tileset(luma_lpk_t *pack, const char *name, luma_tileset_t *out);

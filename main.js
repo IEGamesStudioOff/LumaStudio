@@ -399,7 +399,6 @@ function xorCryptBuffer(buffer, keyBuffer) {
 
 function buildSpriteFile(frame) {
   // Format : 2B w (LE) | 2B h (LE) | w*h*2 bytes pixels (BE pour ST7735)
-  // Si pixelsB64 absent → on saute (caller filtre déjà).
   if (!frame.pixelsB64) return null;
   const raw = Buffer.from(frame.pixelsB64, "base64");
   const w = frame.w | 0, h = frame.h | 0;
@@ -409,16 +408,168 @@ function buildSpriteFile(frame) {
   header.writeUInt16LE(w, 0);
   header.writeUInt16LE(h, 2);
 
-  // raw est en little-endian (Uint16Array JS). ST7735 attend big-endian.
   const body = Buffer.alloc(w * h * 2);
   for (let i = 0; i < w * h; i++) {
     const lo = raw[i * 2];
     const hi = raw[i * 2 + 1];
-    body[i * 2] = hi;     // high byte first
-    body[i * 2 + 1] = lo; // low byte second
+    body[i * 2] = hi;
+    body[i * 2 + 1] = lo;
+  }
+  return Buffer.concat([header, body]);
+}
+
+// V1.5.4 — Compile un tileset en binaire pour ESP32 / LPK
+// Format : "LTS1" magic (4B) | cols u16 LE | rows u16 LE | tileSize u16 LE |
+//          cols*rows*tileSize*tileSize*2 bytes RGB565 BE (ST7735-ready)
+// L'image source du tileset est dans `ts.dataUrl` (PNG/JPEG en base64).
+// On la décode pixel-par-pixel et on quantifie en RGB565 BE.
+function buildTilesetFile(ts) {
+  if (!ts || !ts.dataUrl || !ts.cols || !ts.rows || !ts.tileSize) return null;
+  const tileSize = ts.tileSize | 0;
+  const cols = ts.cols | 0;
+  const rows = ts.rows | 0;
+  const totalPixels = cols * rows * tileSize * tileSize;
+
+  // Décode le dataUrl en buffer brut PNG/JPEG
+  const m = ts.dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+  if (!m) return null;
+  const imgBuf = Buffer.from(m[1], "base64");
+
+  // Utilise pngjs si dispo, sinon parseur PNG minimal embarqué.
+  // Pour rester sans dépendance, on utilise un parseur PNG manuel basique
+  // qui ne gère que les PNG RGBA 8-bit (le format de sortie Electron natif).
+  // Pour les autres formats, fallback : on appellera Electron nativeImage.
+  let rgba = null;
+  try {
+    rgba = decodePngToRgba(imgBuf);
+  } catch (e) {
+    // Fallback nativeImage Electron pour JPEG/autres
+    try {
+      const { nativeImage } = require("electron");
+      const ni = nativeImage.createFromBuffer(imgBuf);
+      const bmp = ni.toBitmap(); // BGRA
+      rgba = { width: ni.getSize().width, height: ni.getSize().height, data: bgrasToRgba(bmp) };
+    } catch (err2) {
+      console.warn("buildTilesetFile: impossible de décoder", ts.name, e?.message, err2?.message);
+      return null;
+    }
+  }
+  if (!rgba) return null;
+  if (rgba.width < cols * tileSize || rgba.height < rows * tileSize) {
+    console.warn(`buildTilesetFile: image ${rgba.width}x${rgba.height} trop petite pour ${cols}x${rows} tuiles de ${tileSize}px`);
+    return null;
   }
 
+  // En-tête : magic "LTS1" + cols + rows + tileSize
+  const header = Buffer.alloc(10);
+  header.write("LTS1", 0, 4, "ascii");
+  header.writeUInt16LE(cols, 4);
+  header.writeUInt16LE(rows, 6);
+  header.writeUInt16LE(tileSize, 8);
+
+  // Corps : tuiles dans l'ordre (row, col), chaque tuile = tileSize*tileSize pixels RGB565 BE
+  const body = Buffer.alloc(totalPixels * 2);
+  let outIdx = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      for (let y = 0; y < tileSize; y++) {
+        for (let x = 0; x < tileSize; x++) {
+          const srcX = c * tileSize + x;
+          const srcY = r * tileSize + y;
+          const off = (srcY * rgba.width + srcX) * 4;
+          const R = rgba.data[off], G = rgba.data[off + 1], B = rgba.data[off + 2], A = rgba.data[off + 3];
+          let rgb565;
+          if (A < 128) rgb565 = 0xF81F; // transparent magenta
+          else rgb565 = ((R >> 3) << 11) | ((G >> 2) << 5) | (B >> 3);
+          // BE : hi puis lo
+          body[outIdx * 2]     = (rgb565 >> 8) & 0xFF;
+          body[outIdx * 2 + 1] = rgb565 & 0xFF;
+          outIdx++;
+        }
+      }
+    }
+  }
   return Buffer.concat([header, body]);
+}
+
+// Parseur PNG minimal : décode un PNG truecolor+alpha 8-bit en RGBA brut.
+// Suffit pour les PNG produits par Electron / la plupart des éditeurs.
+// Retourne {width, height, data: Buffer(RGBA)}.
+function decodePngToRgba(buf) {
+  const zlib = require("zlib");
+  if (buf.length < 8 || buf[0] !== 0x89 || buf.toString("ascii", 1, 4) !== "PNG") {
+    throw new Error("Not a PNG");
+  }
+  let pos = 8;
+  let width = 0, height = 0, bitDepth = 0, colorType = 0;
+  const idatChunks = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos); pos += 4;
+    const type = buf.toString("ascii", pos, pos + 4); pos += 4;
+    const data = buf.slice(pos, pos + len);
+    pos += len + 4; // skip CRC
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === "IDAT") {
+      idatChunks.push(data);
+    } else if (type === "IEND") break;
+  }
+  if (bitDepth !== 8 || (colorType !== 6 && colorType !== 2)) {
+    // 6 = RGBA, 2 = RGB. On ne gère que ces deux cas.
+    throw new Error(`PNG bitDepth=${bitDepth} colorType=${colorType} non supporté ici`);
+  }
+  const inflated = zlib.inflateSync(Buffer.concat(idatChunks));
+  const bytesPerPixel = colorType === 6 ? 4 : 3;
+  const stride = width * bytesPerPixel;
+  const rgba = Buffer.alloc(width * height * 4);
+  // Reconstruction des scanlines avec filtres PNG
+  const prevLine = Buffer.alloc(stride);
+  let inPos = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = inflated[inPos++];
+    const line = Buffer.alloc(stride);
+    for (let x = 0; x < stride; x++) {
+      const raw = inflated[inPos++];
+      const left = x >= bytesPerPixel ? line[x - bytesPerPixel] : 0;
+      const up = prevLine[x];
+      const upLeft = x >= bytesPerPixel ? prevLine[x - bytesPerPixel] : 0;
+      let recon;
+      if (filter === 0) recon = raw;
+      else if (filter === 1) recon = (raw + left) & 0xFF;
+      else if (filter === 2) recon = (raw + up) & 0xFF;
+      else if (filter === 3) recon = (raw + Math.floor((left + up) / 2)) & 0xFF;
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - upLeft);
+        const paeth = (pa <= pb && pa <= pc) ? left : (pb <= pc ? up : upLeft);
+        recon = (raw + paeth) & 0xFF;
+      } else throw new Error("Filtre PNG inconnu: " + filter);
+      line[x] = recon;
+    }
+    // Copie vers RGBA
+    for (let x = 0; x < width; x++) {
+      rgba[(y * width + x) * 4]     = line[x * bytesPerPixel];
+      rgba[(y * width + x) * 4 + 1] = line[x * bytesPerPixel + 1];
+      rgba[(y * width + x) * 4 + 2] = line[x * bytesPerPixel + 2];
+      rgba[(y * width + x) * 4 + 3] = colorType === 6 ? line[x * bytesPerPixel + 3] : 255;
+    }
+    line.copy(prevLine);
+  }
+  return { width, height, data: rgba };
+}
+
+function bgrasToRgba(bgra) {
+  const out = Buffer.alloc(bgra.length);
+  for (let i = 0; i < bgra.length; i += 4) {
+    out[i]     = bgra[i + 2]; // R
+    out[i + 1] = bgra[i + 1]; // G
+    out[i + 2] = bgra[i];     // B
+    out[i + 3] = bgra[i + 3]; // A
+  }
+  return out;
 }
 
 function makeLPK(projectDir, outputPath, secureKey = null) {
@@ -460,6 +611,17 @@ function makeLPK(projectDir, outputPath, secureKey = null) {
     offset += spr.length;
   }
 
+  // V1.5.4 — Compile chaque tileset en binaire pour le moteur ESP32
+  const tilesets = readJsonSafe(path.join(projectDir, "assets", "tilesets", "tilesets.json"), []);
+  for (const ts of tilesets) {
+    const tls = buildTilesetFile(ts);
+    if (!tls) continue;
+    const name = "tilesets/" + ts.id + ".tls";
+    table.push({ name, offset, size: tls.length, type: "tileset" });
+    chunks.push(tls);
+    offset += tls.length;
+  }
+
   const header = Buffer.from(JSON.stringify({
     magic: "LUMA_LPK_V1",
     secure: !!secureKey,
@@ -493,10 +655,22 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
   const triggers = readJsonSafe(path.join(projectDir, "triggers", "triggers.json"), []);
   const maps = readJsonSafe(path.join(projectDir, "maps", "maps.json"), []);
   const scenes = readJsonSafe(path.join(projectDir, "scenes", "scenes.json"), []);
+  const tilesets = readJsonSafe(path.join(projectDir, "assets", "tilesets", "tilesets.json"), []);
 
-  // V1.4 — Enrichir chaque instance d'objet placée dans une scène avec le nom
-  // du sprite à blitter sur ESP32, résolu en parcourant objects[].spriteFrameId
-  // → frames[].id → nom de fichier dans le LPK (sprites/<frame_id>.spr).
+  // V1.5.4 — Enrichir chaque map avec les infos du tileset assigné pour
+  // que le moteur ESP32 puisse les charger sans avoir à parser tilesets.json
+  const tilesetById = new Map(tilesets.map(t => [t.id, t]));
+  for (const m of maps) {
+    if (!m.tilesetId) continue;
+    const ts = tilesetById.get(m.tilesetId);
+    if (!ts) continue;
+    m.tilesetName = "tilesets/" + ts.id + ".tls";
+    m.tilesetCols = ts.cols;
+    m.tilesetRows = ts.rows;
+    m.tilesetTileSize = ts.tileSize;
+  }
+
+  // V1.4 — Enrichir chaque instance d'objet placée avec le nom du sprite
   const frameById = new Map(frames.map(f => [f.id, f]));
   const objectById = new Map(objects.map(o => [o.id, o]));
   for (const sc of scenes) {
@@ -510,7 +684,6 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
         inst.spriteW = frame.w;
         inst.spriteH = frame.h;
       }
-      // animation : on garde le tag pour V1.5 (multi-frame animé sur console)
       if (obj.animationId) inst.animationId = obj.animationId;
       inst.type = obj.type;
       inst.behavior = obj.behavior;
@@ -519,6 +692,14 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
       inst.speed = obj.speed || 0;
     }
   }
+
+  // V1.5.4 — N'inclut PAS tilesets[].dataUrl dans game.luma (image massive
+  // déjà dans le LPK). On envoie juste un index léger.
+  const tilesetsLite = tilesets.map(t => ({
+    id: t.id, name: t.name, tileSize: t.tileSize, cols: t.cols, rows: t.rows,
+    tileCount: t.tileCount, width: t.width, height: t.height,
+    fileName: "tilesets/" + t.id + ".tls"
+  }));
 
   const gameData = {
     magic: "LUMA_GAME_V1",
@@ -532,7 +713,8 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
     cutscenes,
     triggers,
     maps,
-    scenes
+    scenes,
+    tilesets: tilesetsLite
   };
 
   let data = Buffer.from(JSON.stringify(gameData, null, 2), "utf8");

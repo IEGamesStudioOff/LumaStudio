@@ -193,6 +193,53 @@ static uint16_t tile_color(uint8_t id, bool decor) {
     return TILE_PALETTE[shifted];
 }
 
+// V1.5.4 — Blit une tuile depuis le tileset préchargé (active_tileset.pixels).
+// tile_idx : index dans le tileset (0-based). Le mapping côté Studio est
+// valeur_de_layer = tile_idx + 1 (0 réservé = vide).
+// Retourne false si l'index est invalide → caller peut faire fallback.
+bool luma_render_blit_tile(int x, int y, int tile_idx, const luma_tileset_t *ts) {
+    if (!ts || !ts->loaded || tile_idx < 0) return false;
+    int total = (int)ts->cols * (int)ts->rows;
+    if (tile_idx >= total) return false;
+
+    int tsize = ts->tile_size;
+    if (tsize <= 0 || tsize > 64) return false;
+
+    // Offset du premier pixel de cette tuile dans le buffer linéaire
+    uint32_t base = (uint32_t)tile_idx * tsize * tsize;
+
+    for (int row = 0; row < tsize; row++) {
+        int py = y + row;
+        if (py < 0 || py >= LUMA_LCD_HEIGHT) continue;
+
+        // Recherche des segments opaques pour grouper en un seul push SPI
+        int col = 0;
+        while (col < tsize) {
+            while (col < tsize && ts->pixels[base + row * tsize + col] == LUMA_TILESET_TRANSPARENT) col++;
+            if (col >= tsize) break;
+            int start = col;
+            while (col < tsize && ts->pixels[base + row * tsize + col] != LUMA_TILESET_TRANSPARENT) col++;
+            int segLen = col - start;
+
+            int px = x + start;
+            int segPx = segLen;
+            int srcStart = 0;
+            if (px < 0) { srcStart = -px; segPx += px; px = 0; }
+            if (px + segPx > LUMA_LCD_WIDTH) segPx = LUMA_LCD_WIDTH - px;
+            if (segPx <= 0) continue;
+
+            uint16_t line[64];
+            for (int i = 0; i < segPx; i++) {
+                uint16_t c = ts->pixels[base + row * tsize + start + srcStart + i];
+                line[i] = (c >> 8) | (c << 8); // LE → BE pour ST7735
+            }
+            lcd_set_addr(px, py, px + segPx - 1, py);
+            lcd_data(line, segPx * 2);
+        }
+    }
+    return true;
+}
+
 void luma_render_runtime(luma_runtime_t *rt) {
     luma_render_clear(LUMA_BLACK);
 
@@ -209,7 +256,12 @@ void luma_render_runtime(luma_runtime_t *rt) {
     if (end_x > map_w) end_x = map_w;
     if (end_y > map_h) end_y = map_h;
 
-    // Bug #6 fix: dessine les vraies tiles depuis layer_floor puis layer_decor
+    // V1.5.4 — Si un tileset est préchargé pour cette map, on blit les vraies
+    // tuiles depuis active_tileset.pixels. Sinon, fallback couleurs unies (V1.4).
+    bool has_tileset = rt->active_tileset.loaded
+        && rt->active_tileset.tile_size > 0
+        && rt->active_tileset.cols > 0;
+
     for (int ty = start_y; ty < end_y; ty++) {
         for (int tx = start_x; tx < end_x; tx++) {
             int idx = ty * map_w + tx;
@@ -219,10 +271,26 @@ void luma_render_runtime(luma_runtime_t *rt) {
             int py = ty * tile - rt->camera_y;
 
             uint8_t f = rt->layer_floor[idx];
-            if (f) luma_render_rect(px, py, tile, tile, tile_color(f, false));
+            if (f) {
+                if (has_tileset) {
+                    if (!luma_render_blit_tile(px, py, (int)f - 1, &rt->active_tileset)) {
+                        luma_render_rect(px, py, tile, tile, tile_color(f, false));
+                    }
+                } else {
+                    luma_render_rect(px, py, tile, tile, tile_color(f, false));
+                }
+            }
 
             uint8_t d = rt->layer_decor[idx];
-            if (d) luma_render_rect(px, py, tile, tile, tile_color(d, true));
+            if (d) {
+                if (has_tileset) {
+                    if (!luma_render_blit_tile(px, py, (int)d - 1, &rt->active_tileset)) {
+                        luma_render_rect(px, py, tile, tile, tile_color(d, true));
+                    }
+                } else {
+                    luma_render_rect(px, py, tile, tile, tile_color(d, true));
+                }
+            }
         }
     }
 

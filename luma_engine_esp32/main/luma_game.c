@@ -1,5 +1,6 @@
 #include "luma_game.h"
 #include "luma_sd.h"
+#include "luma_lpk.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include <string.h>
@@ -107,6 +108,23 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
             rt->active_map.height = cJSON_IsNumber(h) ? h->valueint : 15;
             rt->active_map.tile_size = cJSON_IsNumber(tile) ? tile->valueint : 16;
 
+            // V1.5.4 — Champs tileset injectés par makeGameLuma côté Studio
+            rt->active_map.tileset_name[0] = '\0';
+            rt->active_map.tileset_cols = 0;
+            rt->active_map.tileset_rows = 0;
+            rt->active_map.tileset_tile_size = 0;
+            const cJSON *tsName = cJSON_GetObjectItem(map, "tilesetName");
+            const cJSON *tsCols = cJSON_GetObjectItem(map, "tilesetCols");
+            const cJSON *tsRows = cJSON_GetObjectItem(map, "tilesetRows");
+            const cJSON *tsTSz  = cJSON_GetObjectItem(map, "tilesetTileSize");
+            if (cJSON_IsString(tsName)) {
+                strncpy(rt->active_map.tileset_name, tsName->valuestring, LUMA_MAX_PATH - 1);
+                rt->active_map.tileset_name[LUMA_MAX_PATH - 1] = '\0';
+            }
+            if (cJSON_IsNumber(tsCols)) rt->active_map.tileset_cols = tsCols->valueint;
+            if (cJSON_IsNumber(tsRows)) rt->active_map.tileset_rows = tsRows->valueint;
+            if (cJSON_IsNumber(tsTSz))  rt->active_map.tileset_tile_size = tsTSz->valueint;
+
             uint32_t total = (uint32_t)rt->active_map.width * (uint32_t)rt->active_map.height;
             if (total > LUMA_MAX_MAP_TILES) {
                 ESP_LOGW(TAG, "Map %s too big (%u tiles), truncating to %d.",
@@ -187,6 +205,26 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
             dst->sprite_w = cJSON_IsNumber(sw) ? (uint16_t)sw->valueint : 16;
             dst->sprite_h = cJSON_IsNumber(sh) ? (uint16_t)sh->valueint : 16;
             rt->object_count++;
+        }
+    }
+
+    // V1.5.4 — Précharge le tileset assigné à la map depuis le LPK ouvert.
+    // s_assets / s_assets_open sont les externs du LPK initialisé dans main.c
+    extern luma_lpk_t s_assets;
+    extern bool s_assets_open;
+    rt->active_tileset.loaded = false;
+    rt->active_tileset.name[0] = '\0';
+    if (s_assets_open && rt->active_map.tileset_name[0] != '\0') {
+        bool ok = luma_lpk_read_tileset(&s_assets, rt->active_map.tileset_name,
+                                        &rt->active_tileset);
+        if (ok) {
+            ESP_LOGI(TAG, "Tileset chargé: %s (%d×%d tuiles, %dpx, %u px total)",
+                     rt->active_tileset.name, rt->active_tileset.cols,
+                     rt->active_tileset.rows, rt->active_tileset.tile_size,
+                     (unsigned)rt->active_tileset.total_pixels);
+        } else {
+            ESP_LOGW(TAG, "Échec chargement tileset '%s' (trop gros ou introuvable). Fallback couleurs.",
+                     rt->active_map.tileset_name);
         }
     }
 

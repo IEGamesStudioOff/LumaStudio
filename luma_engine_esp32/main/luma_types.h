@@ -22,7 +22,25 @@ typedef struct {
     uint32_t floor_offset;
     uint32_t decor_offset;
     uint32_t collision_offset;
+    // V1.5.4 — Tileset assigné (vide si pas de tileset → fallback couleurs)
+    char tileset_name[LUMA_MAX_PATH];
+    uint16_t tileset_cols;
+    uint16_t tileset_rows;
+    uint16_t tileset_tile_size;
 } luma_map_t;
+
+// V1.5.4 — Tileset chargé en RAM pour la map active.
+// Précharge tout le tileset au boot de la scène : décodage RGB565 BE → LE en RAM.
+// Blit fait par luma_render_blit_tile() qui lit pixels[tile_idx * tile_size² + ...]
+typedef struct {
+    char name[LUMA_MAX_PATH];
+    uint16_t cols;
+    uint16_t rows;
+    uint16_t tile_size;
+    uint32_t total_pixels;
+    bool loaded;
+    uint16_t pixels[LUMA_MAX_TILESET_PIXELS]; // RGB565 LE (host-endian) en RAM
+} luma_tileset_t;
 
 typedef struct {
     char id[LUMA_MAX_NAME];
@@ -94,4 +112,6 @@ typedef struct {
     uint16_t player_sprite_w;
     uint16_t player_sprite_h;
     uint16_t player_sprite_pixels[LUMA_MAX_SPRITE_PIXELS];
+    // V1.5.4 : tileset RGB565 préchargé pour la map active
+    luma_tileset_t active_tileset;
 } luma_runtime_t;

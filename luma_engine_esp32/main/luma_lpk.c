@@ -136,3 +136,57 @@ bool luma_lpk_read_sprite(luma_lpk_t *pack, const char *name,
     if (out_h) *out_h = h;
     return true;
 }
+
+// V1.5.4 — Lit un tileset compilé depuis le LPK.
+// Format binaire : "LTS1" magic (4B) | cols u16 LE | rows u16 LE | tileSize u16 LE
+//                 | cols*rows*tileSize*tileSize*2 bytes RGB565 BE
+bool luma_lpk_read_tileset(luma_lpk_t *pack, const char *name, luma_tileset_t *out) {
+    if (!out) return false;
+    out->loaded = false;
+    const luma_asset_entry_t *asset = luma_lpk_find(pack, name);
+    if (!asset || !pack->file) return false;
+    if (asset->size < 10) return false;
+
+    fseek(pack->file, pack->data_start + asset->offset, SEEK_SET);
+    uint8_t hdr[10];
+    if (fread(hdr, 1, 10, pack->file) != 10) return false;
+
+    // Vérif magic "LTS1"
+    if (hdr[0] != 'L' || hdr[1] != 'T' || hdr[2] != 'S' || hdr[3] != '1') return false;
+
+    uint16_t cols      = (uint16_t)hdr[4] | ((uint16_t)hdr[5] << 8);
+    uint16_t rows      = (uint16_t)hdr[6] | ((uint16_t)hdr[7] << 8);
+    uint16_t tile_size = (uint16_t)hdr[8] | ((uint16_t)hdr[9] << 8);
+    uint32_t total = (uint32_t)cols * rows * tile_size * tile_size;
+    if (total == 0 || total > LUMA_MAX_TILESET_PIXELS) return false;
+    if (asset->size < 10 + total * 2) return false;
+
+    // Lecture pixels en bloc avec byte-swap BE → LE (ST7735 attendra du BE
+    // mais on stocke en host endianness ; le swap final se fait au push SPI)
+    uint8_t buf[128];
+    uint32_t read = 0;
+    while (read < total) {
+        uint32_t chunk = total - read;
+        if (chunk > sizeof(buf) / 2) chunk = sizeof(buf) / 2;
+        if (fread(buf, 1, chunk * 2, pack->file) != chunk * 2) return false;
+        for (uint32_t i = 0; i < chunk; i++) {
+            uint16_t hi = buf[i * 2];
+            uint16_t lo = buf[i * 2 + 1];
+            out->pixels[read + i] = (hi << 8) | lo;
+        }
+        read += chunk;
+    }
+
+    // Copie le nom (avec troncage safe)
+    size_t nlen = strlen(name);
+    if (nlen >= LUMA_MAX_PATH) nlen = LUMA_MAX_PATH - 1;
+    memcpy(out->name, name, nlen);
+    out->name[nlen] = '\0';
+
+    out->cols = cols;
+    out->rows = rows;
+    out->tile_size = tile_size;
+    out->total_pixels = total;
+    out->loaded = true;
+    return true;
+}

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define LUMA_VERSION "1.4.0"
+#define LUMA_VERSION "1.5.4"
 
 // Screen
 #define LUMA_LCD_WIDTH   160
@@ -53,6 +53,12 @@
 // Max tiles d'une map chargée en RAM (ex: 64x64 = 4096 tiles par couche)
 // Chaque couche fait LUMA_MAX_MAP_TILES octets, on a 3 couches → ~12 Ko max.
 #define LUMA_MAX_MAP_TILES   4096
+
+// V1.5.4 — Tileset chargé en RAM pour la map active.
+// 32×32 px × 64 tuiles = 65 536 px × 2 octets = 128 Ko. Trop pour WROOM stable.
+// On limite à 64 Ko (ex: 16×16 × 256 tuiles, ou 32×32 × 64 tuiles).
+#define LUMA_MAX_TILESET_PIXELS  (32 * 1024)  // 32 K pixels = 64 Ko RAM
+#define LUMA_TILESET_TRANSPARENT 0xF81F        // magenta = pixel transparent
 
 // RGB565 colors
 #define LUMA_BLACK   0x0000
