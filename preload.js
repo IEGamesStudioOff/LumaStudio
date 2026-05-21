@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("lumaAPI", {
   importPortrait: () => ipcRenderer.invoke("portrait:import"),
   saveFrames: (frames) => ipcRenderer.invoke("asset:save-frames", frames),
   saveAnimations: (anims) => ipcRenderer.invoke("asset:save-animations", anims),
+  saveTilesets: (tilesets) => ipcRenderer.invoke("tilesets:save", tilesets),
   saveLogic: (data) => ipcRenderer.invoke("logic:save-v05", data),
   saveMusic: (music) => ipcRenderer.invoke("music:save", music),
   saveNarrative: (data) => ipcRenderer.invoke("narrative:save", data),

@@ -174,6 +174,7 @@ ipcMain.handle("project:open", async () => {
     config,
     frames: readJsonSafe(path.join(projectDir, "assets", "sprites", "frames.json"), []),
     animations: readJsonSafe(path.join(projectDir, "assets", "sprites", "animations.json"), []),
+    tilesets: readJsonSafe(path.join(projectDir, "assets", "tilesets", "tilesets.json"), []),
     objects: readJsonSafe(path.join(projectDir, "objects", "objects.json"), []),
     events: readJsonSafe(path.join(projectDir, "events", "events.json"), []),
     music: readJsonSafe(path.join(projectDir, "music", "music.json"), []),
@@ -255,6 +256,16 @@ ipcMain.handle("asset:save-animations", async (_event, animations) => {
   const animPath = path.join(currentProjectPath, "assets", "sprites", "animations.json");
   fs.writeFileSync(animPath, JSON.stringify(animations || [], null, 2), "utf8");
   return { ok: true, path: animPath };
+});
+
+// V1.5.3 — Tilesets : sauvegarde de la liste + des images encodées
+ipcMain.handle("tilesets:save", async (_event, tilesets) => {
+  if (!currentProjectPath) return { ok: false, error: "Aucun projet actif." };
+  const tsDir = path.join(currentProjectPath, "assets", "tilesets");
+  if (!fs.existsSync(tsDir)) fs.mkdirSync(tsDir, { recursive: true });
+  const tsPath = path.join(tsDir, "tilesets.json");
+  fs.writeFileSync(tsPath, JSON.stringify(tilesets || [], null, 2), "utf8");
+  return { ok: true, path: tsPath };
 });
 
 ipcMain.handle("logic:save-v05", async (_event, data) => {

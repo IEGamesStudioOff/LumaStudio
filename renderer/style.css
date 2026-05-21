@@ -1097,3 +1097,204 @@ input[type="number"] { width: 60px; }
   line-height: 1.3;
 }
 .spe-hint strong { color: #4dff77; }
+
+/* =============================================================================
+   V1.5.3 — TILESET EDITOR + outils peinture
+   ============================================================================= */
+
+/* Scene toolbar — barre d'outils de peinture */
+.paint-tools {
+  display: flex;
+  gap: 2px;
+  background: #ccc;
+  border: 1px solid #888;
+  padding: 2px;
+}
+.paint-tool {
+  width: 30px; height: 28px;
+  font-size: 16px;
+  background: #eef2f6;
+  border: 1px solid #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.paint-tool:hover { background: #d4e3ff; }
+.paint-tool.active {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: inset 0 0 0 2px #0a2eb0;
+}
+.tool-sep { color: #888; font-weight: 700; padding: 0 4px; }
+
+/* Tileset preview dans Scene Setup */
+.tileset-preview-wrap {
+  margin: 4px 6px;
+  border: 1px solid #999;
+  background: #2a2a2a;
+}
+.tileset-preview-header {
+  padding: 4px 8px;
+  background: #4a4a4a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.tileset-preview-header strong { color: #4dff77; }
+.tileset-preview {
+  padding: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #1a1a1a;
+}
+.tileset-preview .empty {
+  color: #888;
+  font-size: 10px;
+  text-align: center;
+  padding: 16px 8px;
+  margin: 0;
+  font-style: italic;
+}
+.tile-cell {
+  width: 24px; height: 24px;
+  background: #000;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile-cell:hover {
+  border-color: #4dff77;
+  outline: 1px solid #4dff77;
+  z-index: 1;
+}
+.tile-cell.selected {
+  border-color: #fff25a;
+  outline: 2px solid #fff25a;
+  box-shadow: 0 0 6px rgba(255, 242, 90, 0.8);
+  z-index: 2;
+}
+.tile-cell canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* Tileset workspace (mode "tileset") */
+.tileset-editor {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.tileset-side {
+  background: #eaeaea;
+  border: 2px solid #111;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tileset-side h2 {
+  margin: 0;
+  font-size: 12px;
+  color: #444;
+  letter-spacing: 1px;
+}
+.tileset-list {
+  background: #fff;
+  border: 1px solid #888;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  min-height: 100px;
+}
+.tileset-list .empty {
+  color: #888;
+  font-size: 10px;
+  text-align: center;
+  padding: 16px;
+  margin: 0;
+  font-style: italic;
+}
+.tileset-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 24px 24px;
+  gap: 6px;
+  align-items: center;
+  padding: 4px;
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  font-size: 11px;
+}
+.tileset-row:hover { background: #d4e3ff; }
+.tileset-row.active {
+  background: linear-gradient(90deg, #c8f7d0, #f4f4f4);
+  border-left: 3px solid #1fa84a;
+}
+.tileset-row-thumb {
+  width: 48px; height: 48px;
+  border: 1px solid #888;
+  background: #222;
+}
+.tileset-row-thumb canvas {
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
+  display: block;
+}
+.tileset-row-body { overflow: hidden; }
+.tileset-row-body strong {
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.tileset-row-body span {
+  font-size: 9px;
+  color: #555;
+}
+.tileset-row-use, .tileset-row-del {
+  width: 24px; height: 24px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  border: 1px solid #888;
+  cursor: pointer;
+}
+.tileset-row-use { background: #4dff77; color: #000; }
+.tileset-row-use:hover { background: #1fa84a; color: #fff; }
+.tileset-row-del { background: #ffd0d6; color: #d22b3f; border-color: #d22b3f; }
+.tileset-row-del:hover { background: #d22b3f; color: #fff; }
+
+.tileset-main {
+  background: #eaeaea;
+  border: 2px solid #111;
+  padding: 12px;
+}
+.tileset-main h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #444;
+  letter-spacing: 1px;
+}
+.tileset-canvas-wrap {
+  background: #2a2a2a;
+  border: 2px solid #000;
+  padding: 4px;
+  display: flex;
+  justify-content: center;
+}
+#tilesetImportCanvas {
+  background: #dcdcdc;
+  image-rendering: pixelated;
+  display: block;
+  max-width: 100%;
+}

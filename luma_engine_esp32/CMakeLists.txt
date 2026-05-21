@@ -1,4 +1,24 @@
-cmake_minimum_required(VERSION 3.16)
-
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(luma_engine_esp32)
+idf_component_register(
+    SRCS
+        "main.c"
+        "luma_runtime.c"
+        "luma_sd.c"
+        "luma_lpk.c"
+        "luma_game.c"
+        "luma_render.c"
+        "luma_input.c"
+        "luma_audio.c"
+        "luma_save.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        freertos
+        esp_system
+        esp_log
+        nvs_flash
+        spi_flash
+        fatfs
+        sdmmc
+        vfs
+        json
+)

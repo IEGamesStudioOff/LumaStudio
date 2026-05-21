@@ -41,6 +41,16 @@ let camera = { x: 0, y: 0, w: 160, h: 128 };
 let testPlayer = { x: 32, y: 32, size: 12, active: false };
 let currentCutSteps = [];
 
+// V1.5.3 — Tilesets et outils de peinture
+let tilesets = [];                  // [{id, name, dataUrl, tileSize, cols, rows, tileCount}]
+let selectedTilesetId = null;        // tileset utilisé pour la map active
+let selectedTileIndex = 0;           // tuile choisie dans le tileset
+let currentPaintTool = "pencil";     // pencil | bucket | rect | circle | eraser
+const _tilesetImageCache = new Map(); // id → HTMLImageElement chargé
+let _pendingTilesetImage = null;     // image en cours d'import (avant Save)
+let _pendingTilesetDataUrl = null;
+let _shapeStart = null;              // {tx, ty} pour outils rect/circle (drag)
+
 const OBJECT_TYPES = [
   { id: "PLAYER",     label: "🧍 Player",     color: "#fff25a" },
   { id: "ENEMY",      label: "👾 Enemy",      color: "#ff5e57" },
@@ -132,6 +142,7 @@ function enterStudio(path, data = null) {
     window.animations = animations;
     objects = data.objects || [];
     events = data.events || [];
+    tilesets = data.tilesets || [];
     nextObjectId = Math.max(0, ...objects.map(o => Number(o.id) || 0)) + 1;
     nextEventId = Math.max(0, ...events.map(e => Number(e.id) || 0)) + 1;
     if (data.music && data.music.grid) music = data.music;
@@ -143,6 +154,7 @@ function enterStudio(path, data = null) {
     scenes = data.scenes || [];
     if (maps.length) currentMap = maps[0];
     if (scenes.length) currentScene = scenes[0];
+    if (currentMap && currentMap.tilesetId) selectedTilesetId = currentMap.tilesetId;
     if (data.config && data.config.limitBytes) projectLimitBytes = data.config.limitBytes;
   }
   showScreen("studio");
@@ -175,6 +187,7 @@ function setMode(mode) {
   refreshTabs();
   if (mode === "scene" && currentMap && currentScene) renderSceneEditor();
   if (mode === "sprite") drawSpriteWorkspace();
+  if (mode === "tileset") drawTilesetWorkspace();
   if (mode === "music"  && window.LumaMusicEditor)  window.LumaMusicEditor.init();
   if (mode === "objects" && window.LumaObjectEditor) window.LumaObjectEditor.init();
 }
@@ -184,8 +197,8 @@ function refreshTabs() {
   if (!tabs) return;
   tabs.innerHTML = "";
   const labels = {
-    scene: "🗺 Scène", sprite: "🎨 Asset Lab", music: "🎵 Piano Roll",
-    objects: "📦 Objects / Events", build: "🚀 Build"
+    scene: "🗺 Scène", sprite: "🎨 Asset Lab", tileset: "🧱 Tileset Editor",
+    music: "🎵 Piano Roll", objects: "📦 Objects / Events", build: "🚀 Build"
   };
   const lab = labels[currentMode] || currentMode;
   const t = document.createElement("button");
@@ -223,6 +236,7 @@ $("saveAll").addEventListener("click", async () => {
     if (window.LumaMusicEditor) window.LumaMusicEditor.rebuildTracksFromGrid();
     await window.lumaAPI.saveFrames(frames);
     if (window.lumaAPI.saveAnimations) await window.lumaAPI.saveAnimations(animations);
+    if (window.lumaAPI.saveTilesets) await window.lumaAPI.saveTilesets(tilesets);
     await window.lumaAPI.saveLogic({ objects, events, variables: [] });
     await window.lumaAPI.saveMusic(music);
     await window.lumaAPI.saveNarrative({ dialogues, cutscenes, triggers });
@@ -327,18 +341,44 @@ let painting = false;
 mapCanvas.addEventListener("mousedown", (e) => {
   if (!currentMap || !currentScene) return;
   painting = true;
+  // V1.5.3 — outils rect/circle : on enregistre le point de départ
+  const pt = pixelToTile(e);
+  if (pt && (currentPaintTool === "rect" || currentPaintTool === "circle")) {
+    _shapeStart = pt;
+    return;
+  }
   handleMapClick(e);
 });
 mapCanvas.addEventListener("mousemove", (e) => {
   if (!painting) return;
   const tool = $("mapTool").value;
-  if (tool === "paint" || tool === "erase" || tool === "collision") handleMapClick(e);
+  // Drag : pencil/eraser appliquent en continu sur paint mode
+  if (tool === "paint" && (currentPaintTool === "pencil" || currentPaintTool === "eraser")) {
+    handleMapClick(e);
+  }
 });
-mapCanvas.addEventListener("mouseup", () => { painting = false; });
+mapCanvas.addEventListener("mouseup", (e) => {
+  if (!painting) { _shapeStart = null; return; }
+  // V1.5.3 — Si rect/circle, on dessine la forme finale au relâchement
+  if (_shapeStart && (currentPaintTool === "rect" || currentPaintTool === "circle")) {
+    const pt = pixelToTile(e);
+    if (pt) {
+      const val = currentPaintTool === "rect" || currentPaintTool === "circle" ? getPaintValue() : 0;
+      const drawVal = (val === 0) ? 1 : val; // toujours quelque chose
+      if (currentPaintTool === "rect") drawRectTiles(_shapeStart.tx, _shapeStart.ty, pt.tx, pt.ty, drawVal);
+      else drawCircleTiles(_shapeStart.tx, _shapeStart.ty, pt.tx, pt.ty, drawVal);
+      renderSceneEditor();
+      updateCapacityBar();
+    }
+    _shapeStart = null;
+  }
+  painting = false;
+});
 mapCanvas.addEventListener("mouseleave", () => { painting = false; });
 
-function handleMapClick(event) {
-  if (!currentMap) return;
+// V1.5.3 — Helper : convertit pixel coord → tile coord
+function pixelToTile(event) {
+  if (!currentMap) return null;
   const rect = mapCanvas.getBoundingClientRect();
   const sX = mapCanvas.width / rect.width;
   const sY = mapCanvas.height / rect.height;
@@ -346,37 +386,29 @@ function handleMapClick(event) {
   const py = Math.floor((event.clientY - rect.top) * sY);
   const tx = Math.floor(px / currentMap.tileSize);
   const ty = Math.floor(py / currentMap.tileSize);
-  if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return;
+  if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return null;
+  return { px, py, tx, ty };
+}
+
+function handleMapClick(event) {
+  const pt = pixelToTile(event);
+  if (!pt) return;
+  const { px, py, tx, ty } = pt;
 
   const tool = $("mapTool").value;
   const idx = ty * currentMap.width + tx;
-  // V1.5.2 — source unique : le Layer actif de Scene Setup
   const layer = $("sceneLayer") ? $("sceneLayer").value : "floor";
-  const tileVal = Math.max(1, Math.min(7, Number($("tilePaintValue").value) || 1));
 
   if (tool === "paint") {
-    if (layer === "floor" || layer === "decor") {
-      currentMap.layers[layer][idx] = tileVal;
-    } else if (layer === "collision") {
-      currentMap.layers.collision[idx] = 1;
-    } else if (layer === "objects") {
-      $("hint").textContent = "⚠ Pour peindre des objets, change le Layer actif (Scene Setup) en Floor/Decor, ou utilise l'outil 📦 Placer objet.";
-      return;
+    // V1.5.3 — délègue aux outils de peinture
+    if (currentPaintTool === "pencil") {
+      paintTileAt(tx, ty, getPaintValue());
+    } else if (currentPaintTool === "eraser") {
+      paintTileAt(tx, ty, 0);
+    } else if (currentPaintTool === "bucket") {
+      floodFill(tx, ty, getPaintValue());
     }
-  } else if (tool === "erase") {
-    // V1.5.2 — la gomme efface le layer actif (floor, decor, ou collision)
-    if (layer === "floor" || layer === "decor") {
-      currentMap.layers[layer][idx] = 0;
-    } else if (layer === "collision") {
-      currentMap.layers.collision[idx] = 0;
-    } else if (layer === "objects") {
-      // Supprime tout objet placé sur ce tile
-      const ts = currentMap.tileSize;
-      currentScene.objects = currentScene.objects.filter(o =>
-        !(o.x >= tx * ts && o.x < (tx + 1) * ts && o.y >= ty * ts && o.y < (ty + 1) * ts));
-    }
-  } else if (tool === "collision") {
-    currentMap.layers.collision[idx] = currentMap.layers.collision[idx] ? 0 : 1;
+    // rect/circle gérés au mouseup
   } else if (tool === "spawn") {
     currentScene.playerSpawn.x = tx * currentMap.tileSize;
     currentScene.playerSpawn.y = ty * currentMap.tileSize;
@@ -400,10 +432,7 @@ function handleMapClick(event) {
       return;
     }
     const o = objects.find(o => String(o.id) === String(pickedId));
-    if (!o) {
-      $("hint").textContent = "⚠ Objet introuvable.";
-      return;
-    }
+    if (!o) { $("hint").textContent = "⚠ Objet introuvable."; return; }
     const f = frames.find(fr => fr.id === o.spriteFrameId);
     currentScene.objects.push({
       objectId: o.id,
@@ -540,10 +569,27 @@ function renderSceneEditor() {
 function drawTileLayer(name, decor) {
   const layer = currentMap.layers[name];
   const ts = currentMap.tileSize;
+  // V1.5.3 — si la map a un tileset, on rend les vraies tuiles
+  const tileset = currentMap.tilesetId
+    ? tilesets.find(t => t.id === currentMap.tilesetId) : null;
+  const img = tileset ? getTilesetImage(tileset) : null;
+
   for (let y = 0; y < currentMap.height; y++) {
     for (let x = 0; x < currentMap.width; x++) {
       const v = layer[y * currentMap.width + x];
-      if (v) {
+      if (!v) continue;
+      if (tileset && img && img.complete) {
+        // v = index_de_tuile + 1 (0 = vide). Décodage : col/row dans le tileset.
+        const tileIdx = v - 1;
+        if (tileIdx < 0 || tileIdx >= tileset.tileCount) continue;
+        const col = tileIdx % tileset.cols;
+        const row = Math.floor(tileIdx / tileset.cols);
+        mapCtx.imageSmoothingEnabled = false;
+        mapCtx.drawImage(img,
+          col * tileset.tileSize, row * tileset.tileSize, tileset.tileSize, tileset.tileSize,
+          x * ts, y * ts, ts, ts);
+      } else {
+        // Fallback : couleurs solides palette TILE_HEX
         const idx = decor ? ((v + 2) & 7) : (v & 7);
         mapCtx.fillStyle = TILE_HEX[idx];
         mapCtx.fillRect(x * ts, y * ts, ts, ts);
@@ -924,6 +970,8 @@ $("buildGame").addEventListener("click", async () => {
 function refreshAllLists() {
   refreshObjectPicker();
   refreshMusicPicker();
+  refreshTilesetSelectors();
+  drawTilesetSelectorGrid();
   populateLibrary();
 }
 
@@ -955,6 +1003,23 @@ function populateLibrary() {
     btn.onclick = () => setMode("objects");
     return btn;
   }, "Aucun objet. Crée-en un dans Objects/Events.", (o) => deleteObjectFromLib(o));
+
+  // V1.5.3 — Tilesets dans la library
+  populateLibSection("libTilesets", "libTilesetsCount", tilesets, (ts) => {
+    const btn = document.createElement("button");
+    btn.textContent = `🧱 ${ts.name} (${ts.tileSize}px · ${ts.tileCount})`;
+    btn.title = "Click pour assigner à la map active";
+    btn.onclick = () => {
+      selectedTilesetId = ts.id;
+      if (currentMap) currentMap.tilesetId = ts.id;
+      selectedTileIndex = 0;
+      refreshTilesetSelectors();
+      drawTilesetSelectorGrid();
+      if (currentMap && currentScene) renderSceneEditor();
+      $("hint").textContent = `✓ Tileset « ${ts.name} » assigné.`;
+    };
+    return btn;
+  }, "Aucun tileset.");
 
   populateLibSection("libMaps", "libMapsCount", maps, (m) => {
     const btn = document.createElement("button");
@@ -1145,6 +1210,344 @@ function updateMemory() {
   updateCapacityBar();
 }
 
+// =============================================================================
+// V1.5.3 — TILESETS : import, gestion, preview, sélection, rendu
+// =============================================================================
+
+// Cache de chargement des images de tileset
+function getTilesetImage(ts) {
+  if (!ts) return null;
+  if (_tilesetImageCache.has(ts.id)) return _tilesetImageCache.get(ts.id);
+  const img = new Image();
+  img.onload = () => {
+    // Force un re-render quand l'image est prête
+    if (currentMode === "scene") renderSceneEditor();
+    drawTilesetSelectorGrid();
+    drawTilesetWorkspace();
+  };
+  img.src = ts.dataUrl;
+  _tilesetImageCache.set(ts.id, img);
+  return img;
+}
+
+// IMPORT — étape 1 : choisir une image (réutilise le handler IPC asset:import-image)
+$("importTileset").addEventListener("click", async () => {
+  try {
+    const result = await window.lumaAPI.importImage();
+    if (result.canceled) return;
+    if (!result.ok) return alert(result.error || "Erreur import.");
+    const img = new Image();
+    img.onload = () => {
+      _pendingTilesetImage = img;
+      _pendingTilesetDataUrl = result.dataUrl;
+      $("tilesetName").value = (result.name || "tileset").replace(/\.[^.]+$/, "");
+      $("saveTileset").disabled = false;
+      $("tilesetImportInfo").textContent =
+        `Image chargée : ${img.width}×${img.height}px. Choisis un format puis Ajoute.`;
+      drawTilesetWorkspace();
+    };
+    img.src = result.dataUrl;
+  } catch (err) { alert("Erreur import : " + err.message); }
+});
+
+// IMPORT — étape 2 : confirmer et ajouter à la bibliothèque
+$("saveTileset").addEventListener("click", () => {
+  if (!_pendingTilesetImage) return alert("Importe d'abord une image.");
+  const tileSize = Number($("tilesetSize").value) || 16;
+  const name = ($("tilesetName").value || "tileset").trim();
+  const cols = Math.floor(_pendingTilesetImage.width / tileSize);
+  const rows = Math.floor(_pendingTilesetImage.height / tileSize);
+  if (cols < 1 || rows < 1) {
+    return alert(`L'image (${_pendingTilesetImage.width}×${_pendingTilesetImage.height}) est trop petite pour des tuiles ${tileSize}×${tileSize}.`);
+  }
+  const ts = {
+    id: "ts_" + Date.now(),
+    name, dataUrl: _pendingTilesetDataUrl,
+    tileSize, cols, rows,
+    tileCount: cols * rows,
+    width: _pendingTilesetImage.width,
+    height: _pendingTilesetImage.height
+  };
+  tilesets.push(ts);
+  // Pré-charge dans le cache
+  _tilesetImageCache.set(ts.id, _pendingTilesetImage);
+  // Si pas de tileset actif, on prend celui-ci
+  if (!selectedTilesetId) {
+    selectedTilesetId = ts.id;
+    if (currentMap) currentMap.tilesetId = ts.id;
+  }
+  _pendingTilesetImage = null;
+  _pendingTilesetDataUrl = null;
+  $("saveTileset").disabled = true;
+  $("tilesetImportInfo").textContent = `✅ Tileset « ${name} » ajouté (${cols}×${rows} tuiles, ${tileSize}×${tileSize}px).`;
+  refreshAllLists();
+  refreshTilesetSelectors();
+  drawTilesetWorkspace();
+  drawTilesetSelectorGrid();
+  if (currentMap && currentScene) renderSceneEditor();
+});
+
+// TILESET LIST dans le workspace
+function renderTilesetList() {
+  const el = $("tilesetList");
+  if (!el) return;
+  if (tilesets.length === 0) {
+    el.innerHTML = '<p class="empty">Aucun tileset. Importe une image pour commencer.</p>';
+    return;
+  }
+  el.innerHTML = "";
+  for (const ts of tilesets) {
+    const row = document.createElement("div");
+    row.className = "tileset-row" + (ts.id === selectedTilesetId ? " active" : "");
+    row.innerHTML = `
+      <div class="tileset-row-thumb"><canvas width="48" height="48"></canvas></div>
+      <div class="tileset-row-body">
+        <strong>${ts.name}</strong>
+        <span>${ts.cols}×${ts.rows} tuiles · ${ts.tileSize}px</span>
+      </div>
+      <button class="tileset-row-use" title="Utiliser pour la map active">✓</button>
+      <button class="tileset-row-del" title="Supprimer">×</button>
+    `;
+    const cv = row.querySelector("canvas");
+    drawTilesetThumb(cv, ts);
+    row.querySelector(".tileset-row-use").onclick = () => {
+      selectedTilesetId = ts.id;
+      if (currentMap) currentMap.tilesetId = ts.id;
+      selectedTileIndex = 0;
+      refreshTilesetSelectors();
+      drawTilesetSelectorGrid();
+      renderTilesetList();
+      if (currentMap && currentScene) renderSceneEditor();
+      $("hint").textContent = `✓ Tileset « ${ts.name} » assigné à la map.`;
+    };
+    row.querySelector(".tileset-row-del").onclick = () => {
+      if (!confirm(`Supprimer le tileset « ${ts.name} » ? Les maps qui l'utilisent perdront leur affichage.`)) return;
+      const idx = tilesets.indexOf(ts);
+      if (idx >= 0) tilesets.splice(idx, 1);
+      _tilesetImageCache.delete(ts.id);
+      // Détache des maps
+      for (const m of maps) if (m.tilesetId === ts.id) m.tilesetId = null;
+      if (selectedTilesetId === ts.id) selectedTilesetId = tilesets.length ? tilesets[0].id : null;
+      refreshAllLists();
+      refreshTilesetSelectors();
+      drawTilesetSelectorGrid();
+      renderTilesetList();
+      if (currentMap && currentScene) renderSceneEditor();
+    };
+    el.appendChild(row);
+  }
+}
+
+function drawTilesetThumb(cv, ts) {
+  const ctx = cv.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#222";
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  const img = getTilesetImage(ts);
+  if (img && img.complete) {
+    const scale = Math.min(cv.width / img.width, cv.height / img.height);
+    const w = img.width * scale, h = img.height * scale;
+    ctx.drawImage(img, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+  }
+}
+
+// TILESET IMPORT canvas preview
+function drawTilesetWorkspace() {
+  const cv = $("tilesetImportCanvas");
+  if (!cv) return;
+  const ctx = cv.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#dcdcdc";
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  const img = _pendingTilesetImage;
+  if (img) {
+    const tileSize = Number($("tilesetSize").value) || 16;
+    const scale = Math.min(cv.width / img.width, cv.height / img.height, 4);
+    const dw = img.width * scale, dh = img.height * scale;
+    const ox = Math.floor((cv.width - dw) / 2);
+    const oy = Math.floor((cv.height - dh) / 2);
+    ctx.drawImage(img, ox, oy, dw, dh);
+    // grille des tuiles
+    ctx.strokeStyle = "rgba(255,0,255,0.5)";
+    ctx.lineWidth = 1;
+    const cols = Math.floor(img.width / tileSize);
+    const rows = Math.floor(img.height / tileSize);
+    for (let i = 0; i <= cols; i++) {
+      const x = Math.floor(ox + i * tileSize * scale) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy + dh); ctx.stroke();
+    }
+    for (let j = 0; j <= rows; j++) {
+      const y = Math.floor(oy + j * tileSize * scale) + 0.5;
+      ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + dw, y); ctx.stroke();
+    }
+  }
+  renderTilesetList();
+}
+
+// Recalcule la preview quand on change le format
+$("tilesetSize").addEventListener("change", drawTilesetWorkspace);
+
+// SCENE SETUP — sélecteur tileset + grille de tuiles cliquables
+function refreshTilesetSelectors() {
+  const sel = $("sceneTileset");
+  if (sel) {
+    sel.innerHTML = '<option value="">— Aucun (couleurs) —</option>';
+    for (const ts of tilesets) {
+      const opt = document.createElement("option");
+      opt.value = ts.id;
+      opt.textContent = `${ts.name} (${ts.tileSize}px · ${ts.tileCount} tuiles)`;
+      if (selectedTilesetId === ts.id) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+$("sceneTileset").addEventListener("change", (e) => {
+  selectedTilesetId = e.target.value || null;
+  if (currentMap) currentMap.tilesetId = selectedTilesetId;
+  selectedTileIndex = 0;
+  drawTilesetSelectorGrid();
+  if (currentMap && currentScene) renderSceneEditor();
+});
+
+// Dessine la grille de tuiles cliquable dans Scene Setup
+function drawTilesetSelectorGrid() {
+  const el = $("tilesetPreview");
+  if (!el) return;
+  const ts = tilesets.find(t => t.id === selectedTilesetId);
+  if (!ts) {
+    el.innerHTML = '<p class="empty">Aucun tileset sélectionné.</p>';
+    $("selectedTileLabel").textContent = "—";
+    return;
+  }
+  const img = getTilesetImage(ts);
+  // Cellule de 24px dans le preview (taille fixe pour rester lisible)
+  const cellSize = 24;
+  el.innerHTML = "";
+  el.style.gridTemplateColumns = `repeat(${ts.cols}, ${cellSize}px)`;
+  el.style.display = "grid";
+
+  for (let r = 0; r < ts.rows; r++) {
+    for (let c = 0; c < ts.cols; c++) {
+      const idx = r * ts.cols + c;
+      const cell = document.createElement("div");
+      cell.className = "tile-cell" + (idx === selectedTileIndex ? " selected" : "");
+      cell.title = `Tuile ${idx}`;
+      cell.dataset.idx = idx;
+      const cv = document.createElement("canvas");
+      cv.width = cellSize; cv.height = cellSize;
+      const ctx = cv.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      if (img && img.complete) {
+        ctx.drawImage(img,
+          c * ts.tileSize, r * ts.tileSize, ts.tileSize, ts.tileSize,
+          0, 0, cellSize, cellSize);
+      } else {
+        ctx.fillStyle = "#444";
+        ctx.fillRect(0, 0, cellSize, cellSize);
+      }
+      cell.appendChild(cv);
+      cell.onclick = () => {
+        selectedTileIndex = idx;
+        $("selectedTileLabel").textContent = `#${idx} (col ${c}, row ${r})`;
+        el.querySelectorAll(".tile-cell").forEach(c2 => c2.classList.remove("selected"));
+        cell.classList.add("selected");
+      };
+      el.appendChild(cell);
+    }
+  }
+  $("selectedTileLabel").textContent = `#${selectedTileIndex}`;
+}
+
+// =============================================================================
+// V1.5.3 — OUTILS DE PEINTURE (pencil, bucket, rect, circle, eraser)
+// =============================================================================
+
+document.querySelectorAll(".paint-tool").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".paint-tool").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentPaintTool = btn.dataset.tool;
+    _shapeStart = null;
+    $("hint").textContent = `Outil sélectionné : ${btn.title}`;
+  });
+});
+
+// Helper : applique une valeur sur un tile (selon layer actif)
+function paintTileAt(tx, ty, value) {
+  if (!currentMap) return;
+  if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) return;
+  const idx = ty * currentMap.width + tx;
+  const layer = $("sceneLayer").value;
+  if (layer === "floor" || layer === "decor") {
+    currentMap.layers[layer][idx] = value;
+  } else if (layer === "collision") {
+    currentMap.layers.collision[idx] = value > 0 ? 1 : 0;
+  }
+}
+
+// Flood fill (BFS) — remplit la zone de tiles connectées avec la même valeur
+function floodFill(tx, ty, newValue) {
+  if (!currentMap) return;
+  const layer = $("sceneLayer").value;
+  if (layer === "objects") return;
+  const w = currentMap.width, h = currentMap.height;
+  const target = layer === "collision"
+    ? (currentMap.layers.collision[ty * w + tx] || 0)
+    : currentMap.layers[layer][ty * w + tx];
+  if (target === newValue) return;
+  const queue = [[tx, ty]];
+  const visited = new Uint8Array(w * h);
+  let count = 0;
+  while (queue.length && count < 5000) {
+    const [x, y] = queue.shift();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const i = y * w + x;
+    if (visited[i]) continue;
+    visited[i] = 1;
+    const cur = layer === "collision" ? currentMap.layers.collision[i] : currentMap.layers[layer][i];
+    if (cur !== target) continue;
+    paintTileAt(x, y, newValue);
+    queue.push([x+1, y], [x-1, y], [x, y+1], [x, y-1]);
+    count++;
+  }
+}
+
+// Dessine un rectangle entre (x0,y0) et (x1,y1) inclus
+function drawRectTiles(x0, y0, x1, y1, value) {
+  const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+  const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+  for (let y = ya; y <= yb; y++)
+    for (let x = xa; x <= xb; x++)
+      paintTileAt(x, y, value);
+}
+
+// Dessine un cercle/ellipse inscrite dans la box (x0,y0)-(x1,y1)
+function drawCircleTiles(x0, y0, x1, y1, value) {
+  const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+  const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+  const cx = (xa + xb) / 2, cy = (ya + yb) / 2;
+  const rx = Math.max(0.5, (xb - xa) / 2), ry = Math.max(0.5, (yb - ya) / 2);
+  for (let y = ya; y <= yb; y++) {
+    for (let x = xa; x <= xb; x++) {
+      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+      if (dx * dx + dy * dy <= 1.05) paintTileAt(x, y, value);
+    }
+  }
+}
+
+// Détermine la valeur à peindre selon contexte
+function getPaintValue() {
+  const layer = $("sceneLayer").value;
+  if (layer === "collision") return 1;
+  // Si tileset actif : utiliser selectedTileIndex+1 (0 réservé = vide)
+  if (selectedTilesetId) return selectedTileIndex + 1;
+  // Fallback couleurs : utiliser tile 1-7 selon une valeur par défaut
+  return 1;
+}
+
 // Init final
 refreshTabs();
 refreshAllLists();
+
