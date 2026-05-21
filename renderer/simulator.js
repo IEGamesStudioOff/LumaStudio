@@ -119,10 +119,12 @@
     camera: { x: 0, y: 0 },
     sprite: null,     // { w, h, pixels } premier sprite trouvé
     // V1.5.3 — Tileset support
-    tileset: null,            // tileset assigné à la map (objet complet)
-    tilePixelCache: null,     // Map<tileIdx, Uint16Array> — pixels RGB565 par tuile
+    tileset: null,
+    tilePixelCache: null,
     tilesetReady: false,
-    dialogue: null,   // texte affiché si non-null
+    // V1.5.5 — Cache des sprites RGB565 des objets placés (frameId → {w,h,pixels})
+    objectSpriteCache: null,
+    dialogue: null,
     // input
     keys: {},
     // audio
@@ -187,6 +189,28 @@
       if (ts && ts.dataUrl) {
         sim.tileset = ts;
         loadTilesetForSim(ts);
+      }
+    }
+
+    // V1.5.5 — Précharge les sprites RGB565 des objets placés dans la scène.
+    // Pour chaque instance d'objet → trouve l'objet définition → trouve sa frame
+    // → décode pixelsB64 → cache. Le rendu peut alors blitter chaque objet.
+    sim.objectSpriteCache = new Map();
+    if (sim.scene && Array.isArray(sim.scene.objects)
+        && typeof objects !== "undefined" && typeof frames !== "undefined"
+        && window.LumaSpriteEditor) {
+      for (const inst of sim.scene.objects) {
+        const objDef = objects.find(o => o.id === inst.objectId);
+        if (!objDef || objDef.spriteFrameId == null) continue;
+        if (sim.objectSpriteCache.has(objDef.spriteFrameId)) continue;
+        const frame = frames.find(f => f.id === objDef.spriteFrameId);
+        if (!frame || !frame.pixelsB64) continue;
+        try {
+          const px = window.LumaSpriteEditor.base64ToPixels(frame.pixelsB64, frame.w * frame.h);
+          sim.objectSpriteCache.set(objDef.spriteFrameId, {
+            w: frame.w, h: frame.h, pixels: px
+          });
+        } catch (e) { /* skip frame illisible */ }
       }
     }
 
@@ -352,6 +376,43 @@
           // Pas de tileset : couleurs solides palette
           if (f) drawRect(px, py, tile, tile, TILE_PALETTE[f & 7]);
           if (d) drawRect(px, py, tile, tile, TILE_PALETTE[(d + 2) & 7]);
+        }
+      }
+    }
+
+    // V1.5.5 — Dessine les objets placés dans la scène. Pour chaque instance :
+    // - si sprite en cache → blit pixel-perfect avec transparence magenta
+    // - sinon → rect coloré selon type (fallback identique au scene editor)
+    if (sim.scene && Array.isArray(sim.scene.objects) && typeof objects !== "undefined") {
+      for (const inst of sim.scene.objects) {
+        if (inst.enabled === false) continue;
+        const ox = (inst.x | 0) - sim.camera.x;
+        const oy = (inst.y | 0) - sim.camera.y;
+        // Cull off-screen
+        if (ox <= -64 || ox >= SCREEN_W || oy <= -64 || oy >= SCREEN_H) continue;
+
+        const objDef = objects.find(o => o.id === inst.objectId);
+        let drawn = false;
+        if (objDef && objDef.spriteFrameId != null) {
+          const sp = sim.objectSpriteCache && sim.objectSpriteCache.get(objDef.spriteFrameId);
+          if (sp) {
+            blitSprite(ox, oy, sp.w, sp.h, sp.pixels);
+            drawn = true;
+          }
+        }
+        if (!drawn) {
+          // fallback rect typé (cyan = générique, jaune = player, rouge = enemy…)
+          const w = inst.w || 14, h = inst.h || 14;
+          let color = 0x07FF; // cyan
+          if (objDef) {
+            if      (objDef.type === "PLAYER")     color = 0xFFE0; // jaune
+            else if (objDef.type === "ENEMY")      color = 0xF800; // rouge
+            else if (objDef.type === "NPC")        color = 0x07E0; // vert
+            else if (objDef.type === "ITEM")       color = 0x5BFF; // bleu clair
+            else if (objDef.type === "PROJECTILE") color = 0xFD20; // orange
+            else if (objDef.type === "DECOR")      color = 0xAAFF; // violet
+          }
+          drawRect(ox, oy, w, h, color);
         }
       }
     }
