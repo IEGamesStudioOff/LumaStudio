@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.5.5</title>
+  <title>Luma Studio v1.5.6</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
       <div class="splash-card">
         <img src="../assets/logo.png" alt="Luma Studio" />
         <h1>LUMA STUDIO</h1>
-        <p>v 1.5.5</p>
+        <p>v 1.5.6</p>
       </div>
     </section>
 
@@ -25,7 +25,7 @@
         <div class="dialog-title">
           <img src="../assets/logo.png" alt="">
           <strong>LUMA STUDIO</strong>
-          <span>v 1.5.5</span>
+          <span>v 1.5.6</span>
         </div>
         <div class="dialog-body">
           <div class="form-block">
@@ -60,7 +60,7 @@
       <header class="topbar">
         <div class="brand">
           <img src="../assets/logo.png" alt="Luma">
-          <strong>v 1.5.5</strong>
+          <strong>v 1.5.6</strong>
         </div>
         <div class="toolbar">
           <button id="resetMap" class="btn tiny">reset map</button>
@@ -84,6 +84,16 @@
         <!-- LEFT NAV -->
         <aside class="left-nav">
           <button class="left-section active" data-mode="scene">Scene Setup</button>
+          <!-- V1.5.6 : Liste des scènes du projet -->
+          <div class="scenes-manager">
+            <div class="scenes-header">
+              <span>📑 Scènes (<span id="scenesCount">0</span>)</span>
+              <button id="addScene" class="btn tiny" title="Créer une nouvelle scène">+</button>
+            </div>
+            <div id="scenesList" class="scenes-list">
+              <p class="empty">Aucune scène.</p>
+            </div>
+          </div>
           <div class="setup-grid" id="sceneSetupGrid">
             <label>Name :</label><input id="sceneName" value="Scene 1">
             <label>Map ID</label><input id="mapId" value="map_001">
@@ -123,7 +133,8 @@
               <p class="empty">Importe un tileset dans Tileset Editor.</p>
             </div>
           </div>
-          <button id="createScene" class="btn blue full" style="margin:4px 6px">CRÉER / RESET MAP</button>
+          <button id="createScene" class="btn blue full" style="margin:4px 6px 2px">CRÉER / RESET MAP</button>
+          <button id="resizeMap" class="btn full" style="margin:0 6px 4px" title="Change W/H en gardant le contenu existant">↔ Redimensionner (garde tiles)</button>
 
           <button class="left-section" data-mode="sprite">Sprite Editor</button>
           <button class="left-section" data-mode="tileset">Tileset Editor</button>
@@ -163,6 +174,11 @@
                 <button id="toggleCamera" class="btn tiny">Cadre caméra</button>
                 <button id="centerCamera" class="btn tiny">Centrer caméra</button>
                 <button id="playScenePreview" class="btn tiny">Test joueur</button>
+                <span class="tool-sep">|</span>
+                <button id="zoomOut" class="btn tiny" title="Zoom -">🔍-</button>
+                <span id="zoomLabel" class="zoom-label">100%</span>
+                <button id="zoomIn" class="btn tiny" title="Zoom +">🔍+</button>
+                <button id="zoomReset" class="btn tiny" title="Reset zoom + pan">⊕</button>
                 <span id="mapInfo" class="map-info">Crée une map d'abord.</span>
               </div>
               <div class="scene-canvas-wrap">
@@ -307,7 +323,7 @@
       <!-- BOTTOMBAR -->
       <footer class="bottombar">
         <span id="hint">💡 Glisse un sprite ou un objet de la bibliothèque vers la map. Tous les placements d'un même ID = même objet.</span>
-        <span id="footRight">Luma Studio v1.5.5</span>
+        <span id="footRight">Luma Studio v1.5.6</span>
       </footer>
     </section>
   </main>

@@ -359,6 +359,8 @@
     renderGrid(track);
     rebuildTracksFromGrid();
     updateStats();
+    // V1.5.6 — sync la barre de capacité globale
+    if (typeof window.updateCapacityBar === "function") window.updateCapacityBar();
   }
 
   function updatePlayhead() {

@@ -1537,3 +1537,112 @@ input[type="number"] { width: 60px; }
   margin-left: 4px;
   font-variant-numeric: tabular-nums;
 }
+
+/* =============================================================================
+   V1.5.6 — Multi-scènes + zoom controls
+   ============================================================================= */
+
+/* Scenes manager dans Scene Setup */
+.scenes-manager {
+  border-bottom: 2px solid #000;
+  background: #e8eef3;
+  padding: 4px 6px;
+}
+.scenes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+.scenes-header button {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  font-size: 12px;
+  background: var(--blue);
+  color: #fff;
+  border: 1px solid #0a2eb0;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scenes-list {
+  max-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scenes-list .empty {
+  font-size: 9px;
+  color: #888;
+  margin: 4px 0;
+  font-style: italic;
+  text-align: center;
+}
+.scene-row {
+  display: grid;
+  grid-template-columns: 1fr 18px;
+  gap: 2px;
+}
+.scene-row-pick {
+  background: #fff;
+  border: 1px solid #888;
+  text-align: left;
+  padding: 3px 6px;
+  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 600;
+}
+.scene-row-pick span {
+  font-size: 9px;
+  color: #888;
+  font-weight: 400;
+}
+.scene-row-pick:hover { background: #d4e3ff; }
+.scene-row.active .scene-row-pick {
+  background: linear-gradient(90deg, #fff25a, #ffe066);
+  border-color: #b78b00;
+  color: #000;
+  font-weight: 700;
+}
+.scene-row-del {
+  background: #ffd0d6;
+  border: 1px solid #d22b3f;
+  color: #d22b3f;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+}
+.scene-row-del:hover {
+  background: #d22b3f;
+  color: #fff;
+}
+
+/* Zoom indicator dans la scene toolbar */
+.zoom-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--blue);
+  min-width: 38px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #888;
+  padding: 2px 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Canvas wrap doit avoir overflow visible-ish pour le zoom CSS */
+.scene-canvas-wrap {
+  position: relative;
+  user-select: none;
+}
+#mapCanvas {
+  transform-origin: 0 0;
+  transition: transform 0.05s linear;
+}

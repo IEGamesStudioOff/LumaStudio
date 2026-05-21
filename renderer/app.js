@@ -42,14 +42,20 @@ let testPlayer = { x: 32, y: 32, size: 12, active: false };
 let currentCutSteps = [];
 
 // V1.5.3 — Tilesets et outils de peinture
-let tilesets = [];                  // [{id, name, dataUrl, tileSize, cols, rows, tileCount}]
-let selectedTilesetId = null;        // tileset utilisé pour la map active
-let selectedTileIndex = 0;           // tuile choisie dans le tileset
-let currentPaintTool = "pencil";     // pencil | bucket | rect | circle | eraser
-const _tilesetImageCache = new Map(); // id → HTMLImageElement chargé
-let _pendingTilesetImage = null;     // image en cours d'import (avant Save)
+let tilesets = [];
+let selectedTilesetId = null;
+let selectedTileIndex = 0;
+let currentPaintTool = "pencil";
+const _tilesetImageCache = new Map();
+let _pendingTilesetImage = null;
 let _pendingTilesetDataUrl = null;
-let _shapeStart = null;              // {tx, ty} pour outils rect/circle (drag)
+let _shapeStart = null;
+
+// V1.5.6 — Zoom et pan dans la preview map
+let sceneZoom = 1.0;             // facteur d'échelle CSS du canvas
+let _spaceHeld = false;           // touche Espace maintenue (mode pan)
+let _panDragging = false;
+let _panLast = null;
 
 const OBJECT_TYPES = [
   { id: "PLAYER",     label: "🧍 Player",     color: "#fff25a" },
@@ -271,27 +277,55 @@ $("createScene").addEventListener("click", () => {
   const w = Math.max(10, Number($("mapW").value) || 20);
   const h = Math.max(8,  Number($("mapH").value) || 15);
   const tileSize = Math.max(8, Number($("gridSize").value) || 16);
-  const mapId = $("mapId").value || "map_001";
+  let mapId = $("mapId").value || "map_001";
+  let sceneId = $("sceneName").value || "scene_001";
+  let sceneName = $("sceneName").value || "Scene 001";
 
-  currentMap = {
+  // V1.5.6 — Si on édite une scène existante, on remplace ; sinon on crée nouvelle
+  let isUpdate = false;
+  if (currentScene && currentScene.id === sceneId) {
+    isUpdate = true;
+  } else {
+    // ID unique : suffixe auto si conflit
+    let n = 2;
+    while (scenes.find(s => s.id === sceneId)) {
+      sceneId = (($("sceneName").value || "scene") + "_" + n);
+      sceneName = sceneId;
+      n++;
+    }
+    while (maps.find(m => m.id === mapId)) {
+      mapId = ($("mapId").value || "map") + "_" + n++;
+    }
+  }
+
+  const newMap = {
     id: mapId, width: w, height: h, tileSize,
     layers: {
       floor: new Array(w * h).fill(0),
       decor: new Array(w * h).fill(0),
       collision: new Array(w * h).fill(0)
-    }
+    },
+    tilesetId: selectedTilesetId || null
   };
-  currentScene = {
-    id: $("sceneName").value || "scene_001",
-    name: $("sceneName").value || "Scene 001",
-    mapId,
+  const newScene = {
+    id: sceneId, name: sceneName, mapId,
     music: music.name || "theme_01",
     cameraMode: $("cameraMode").value,
     playerSpawn: { x: 32, y: 32 },
     objects: [], triggers: []
   };
-  maps = [currentMap];
-  scenes = [currentScene];
+
+  if (isUpdate) {
+    const mi = maps.indexOf(currentMap);
+    const si = scenes.indexOf(currentScene);
+    if (mi >= 0) maps[mi] = newMap;
+    if (si >= 0) scenes[si] = newScene;
+  } else {
+    maps.push(newMap);
+    scenes.push(newScene);
+  }
+  currentMap = newMap;
+  currentScene = newScene;
 
   camera = { x: 0, y: 0, w: 160, h: 128 };
   testPlayer = { x: 32, y: 32, size: 12, active: false };
@@ -299,7 +333,58 @@ $("createScene").addEventListener("click", () => {
   renderSceneEditor();
   refreshAllLists();
   updateCapacityBar();
-  $("hint").textContent = `✅ Map ${w}×${h} créée (${w * h} tiles).`;
+  $("hint").textContent = isUpdate
+    ? `🔄 Scène « ${sceneName} » réinitialisée (${w}×${h} tiles).`
+    : `✅ Scène « ${sceneName} » créée (${w}×${h} tiles).`;
+});
+
+// V1.5.6 — Ajouter une nouvelle scène vierge
+$("addScene").addEventListener("click", () => {
+  let n = scenes.length + 1;
+  while (scenes.find(s => s.id === "scene_" + String(n).padStart(3, "0"))) n++;
+  const sId = "scene_" + String(n).padStart(3, "0");
+  const mId = "map_" + String(n).padStart(3, "0");
+  $("sceneName").value = sId;
+  $("mapId").value = mId;
+  $("createScene").click();
+});
+
+// V1.5.6 — Redimensionner la map ACTIVE sans vider le contenu existant.
+// Le contenu de chaque layer est préservé dans la zone qui se recouvre.
+$("resizeMap").addEventListener("click", () => {
+  if (!currentMap) return alert("Pas de map à redimensionner. Crée une scène d'abord.");
+  const newW = Math.max(10, Number($("mapW").value) || currentMap.width);
+  const newH = Math.max(8,  Number($("mapH").value) || currentMap.height);
+  if (newW === currentMap.width && newH === currentMap.height) {
+    $("hint").textContent = "ℹ Dimensions identiques, rien à faire.";
+    return;
+  }
+  if (!confirm(`Redimensionner la map de ${currentMap.width}×${currentMap.height} à ${newW}×${newH} ? Les tiles dans la zone commune sont préservées.`)) return;
+  const oldW = currentMap.width, oldH = currentMap.height;
+  const minW = Math.min(oldW, newW), minH = Math.min(oldH, newH);
+  for (const layerName of ["floor", "decor", "collision"]) {
+    const oldLayer = currentMap.layers[layerName];
+    const newLayer = new Array(newW * newH).fill(0);
+    for (let y = 0; y < minH; y++) {
+      for (let x = 0; x < minW; x++) {
+        newLayer[y * newW + x] = oldLayer[y * oldW + x];
+      }
+    }
+    currentMap.layers[layerName] = newLayer;
+  }
+  currentMap.width = newW;
+  currentMap.height = newH;
+  // Cull les objets hors limites
+  if (currentScene && currentScene.objects) {
+    const ts = currentMap.tileSize;
+    const before = currentScene.objects.length;
+    currentScene.objects = currentScene.objects.filter(o => o.x < newW * ts && o.y < newH * ts);
+    const removed = before - currentScene.objects.length;
+    if (removed > 0) $("hint").textContent = `↔ Map ${newW}×${newH} · ${removed} objet(s) hors limites supprimé(s).`;
+    else $("hint").textContent = `↔ Map redimensionnée à ${newW}×${newH} sans perte.`;
+  }
+  renderSceneEditor();
+  updateCapacityBar();
 });
 
 $("showGrid").addEventListener("change", () => renderSceneEditor());
@@ -394,6 +479,105 @@ mapCanvas.addEventListener("mouseup", (e) => {
   painting = false;
 });
 mapCanvas.addEventListener("mouseleave", () => { painting = false; });
+
+// =============================================================================
+// V1.5.6 — ZOOM + PAN dans la preview map
+// =============================================================================
+
+// Molette = zoom in/out centré sur le curseur. La preview est encadrée par
+// .scene-canvas-wrap (overflow:auto), donc on peut utiliser scrollLeft/scrollTop
+// pour que le zoom semble centré sur le pointeur.
+mapCanvas.addEventListener("wheel", (e) => {
+  if (!currentMap) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const oldZoom = sceneZoom;
+  sceneZoom = Math.max(0.25, Math.min(8, sceneZoom * factor));
+  applySceneZoom();
+  // Recentre le scroll pour garder le pointeur sur le même tile
+  const wrap = document.querySelector(".scene-canvas-wrap");
+  if (wrap) {
+    const rect = mapCanvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const ratio = sceneZoom / oldZoom;
+    wrap.scrollLeft = (wrap.scrollLeft + mouseX) * ratio - mouseX;
+    wrap.scrollTop  = (wrap.scrollTop  + mouseY) * ratio - mouseY;
+  }
+}, { passive: false });
+
+function applySceneZoom() {
+  if (mapCanvas) {
+    mapCanvas.style.transform = `scale(${sceneZoom})`;
+    mapCanvas.style.transformOrigin = "0 0";
+  }
+  if ($("zoomLabel")) $("zoomLabel").textContent = Math.round(sceneZoom * 100) + "%";
+}
+
+// Boutons zoom
+$("zoomIn").addEventListener("click", () => {
+  sceneZoom = Math.min(8, sceneZoom * 1.25);
+  applySceneZoom();
+});
+$("zoomOut").addEventListener("click", () => {
+  sceneZoom = Math.max(0.25, sceneZoom / 1.25);
+  applySceneZoom();
+});
+$("zoomReset").addEventListener("click", () => {
+  sceneZoom = 1.0;
+  applySceneZoom();
+  const wrap = document.querySelector(".scene-canvas-wrap");
+  if (wrap) { wrap.scrollLeft = 0; wrap.scrollTop = 0; }
+});
+
+// Espace maintenu = mode pan (curseur grab)
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && currentMode === "scene" && !_spaceHeld
+      && !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    _spaceHeld = true;
+    if (mapCanvas) mapCanvas.style.cursor = "grab";
+  }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.code === "Space") {
+    _spaceHeld = false;
+    _panDragging = false;
+    if (mapCanvas) mapCanvas.style.cursor = "crosshair";
+  }
+});
+
+// Pan : Espace+drag OU clic-milieu (souris)
+mapCanvas.addEventListener("mousedown", (e) => {
+  if ((_spaceHeld || e.button === 1) && currentMap) {
+    e.preventDefault();
+    _panDragging = true;
+    _panLast = { x: e.clientX, y: e.clientY };
+    mapCanvas.style.cursor = "grabbing";
+    painting = false;
+  }
+}, true); // capture: priorité sur le handler de peinture
+
+mapCanvas.addEventListener("mousemove", (e) => {
+  if (!_panDragging || !_panLast) return;
+  const dx = e.clientX - _panLast.x;
+  const dy = e.clientY - _panLast.y;
+  _panLast = { x: e.clientX, y: e.clientY };
+  const wrap = document.querySelector(".scene-canvas-wrap");
+  if (wrap) {
+    wrap.scrollLeft -= dx;
+    wrap.scrollTop  -= dy;
+  }
+});
+
+window.addEventListener("mouseup", () => {
+  if (_panDragging) {
+    _panDragging = false;
+    if (mapCanvas) mapCanvas.style.cursor = _spaceHeld ? "grab" : "crosshair";
+  }
+});
+
+// =============================================================================
 
 // V1.5.3 — Helper : convertit pixel coord → tile coord
 function pixelToTile(event) {
@@ -1091,7 +1275,74 @@ function refreshAllLists() {
   refreshMusicPicker();
   refreshTilesetSelectors();
   drawTilesetSelectorGrid();
+  renderScenesList();
   populateLibrary();
+}
+
+// V1.5.6 — Liste des scènes du projet dans Scene Setup (gauche)
+function renderScenesList() {
+  const el = $("scenesList");
+  const cnt = $("scenesCount");
+  if (!el) return;
+  if (cnt) cnt.textContent = scenes.length;
+  if (scenes.length === 0) {
+    el.innerHTML = '<p class="empty">Aucune scène.</p>';
+    return;
+  }
+  el.innerHTML = "";
+  for (const s of scenes) {
+    const row = document.createElement("div");
+    row.className = "scene-row" + (s === currentScene ? " active" : "");
+    const m = maps.find(mm => mm.id === s.mapId);
+    const dims = m ? `${m.width}×${m.height}` : "?";
+    row.innerHTML = `
+      <button class="scene-row-pick" title="Activer cette scène">${s.name || s.id}<span>${dims}</span></button>
+      <button class="scene-row-del" title="Supprimer">×</button>
+    `;
+    row.querySelector(".scene-row-pick").onclick = () => switchToScene(s);
+    row.querySelector(".scene-row-del").onclick = (ev) => {
+      ev.stopPropagation();
+      deleteSceneAndMap(s);
+    };
+    el.appendChild(row);
+  }
+}
+
+function switchToScene(s) {
+  if (!s) return;
+  currentScene = s;
+  currentMap = maps.find(m => m.id === s.mapId);
+  if (currentMap && currentMap.tilesetId) selectedTilesetId = currentMap.tilesetId;
+  // Reflète dans les inputs Scene Setup
+  if ($("sceneName")) $("sceneName").value = s.name || s.id;
+  if ($("mapId") && currentMap) $("mapId").value = currentMap.id;
+  if ($("mapW") && currentMap) $("mapW").value = currentMap.width;
+  if ($("mapH") && currentMap) $("mapH").value = currentMap.height;
+  if ($("gridSize") && currentMap) $("gridSize").value = currentMap.tileSize;
+  if ($("cameraMode") && s.cameraMode) $("cameraMode").value = s.cameraMode;
+  camera = { x: 0, y: 0, w: 160, h: 128 };
+  sceneZoom = 1.0;
+  applySceneZoom();
+  renderSceneEditor();
+  renderScenesList();
+  refreshTilesetSelectors();
+  drawTilesetSelectorGrid();
+  $("hint").textContent = `📑 Scène active : « ${s.name || s.id} »`;
+}
+
+function deleteSceneAndMap(s) {
+  if (scenes.length <= 1) return alert("Il doit rester au moins une scène. Crée-en une autre avant.");
+  if (!confirm(`Supprimer la scène « ${s.name || s.id} » et sa map ${s.mapId} ?`)) return;
+  const si = scenes.indexOf(s);
+  if (si >= 0) scenes.splice(si, 1);
+  const m = maps.find(mm => mm.id === s.mapId);
+  if (m) {
+    const mi = maps.indexOf(m);
+    if (mi >= 0) maps.splice(mi, 1);
+  }
+  // Si on supprimait la scène active, switch sur la première restante
+  if (currentScene === s) switchToScene(scenes[0]);
+  else { renderScenesList(); updateCapacityBar(); }
 }
 
 // V1.5.1 — Peuple les divs library statiques du HTML
@@ -1280,13 +1531,33 @@ function selectObject(o) {
 function updateCapacityBar() {
   let sprites = 0;
   for (const f of frames) sprites += f.rgb565Bytes || 0;
+
+  // V1.5.6 — Tilesets en RAM = cols × rows × tileSize² × 2 bytes RGB565
+  let tilesetsBytes = 0;
+  for (const ts of tilesets) {
+    tilesetsBytes += (ts.cols || 0) * (ts.rows || 0)
+                   * (ts.tileSize || 0) * (ts.tileSize || 0) * 2;
+  }
+
   let audio = window.LumaMusicEditor ? window.LumaMusicEditor.getByteSize() : 0;
+
+  // V1.5.6 — Toutes les maps de toutes les scènes (W×H×3 layers)
   let maps_b = 0;
   for (const m of maps) maps_b += (m.width || 0) * (m.height || 0) * 3;
+
+  // V1.5.6 — Compter aussi les instances d'objets dans toutes les scènes
+  let instancesBytes = 0;
+  for (const sc of scenes) {
+    if (sc.objects) instancesBytes += sc.objects.length * 16;
+    if (sc.triggers) instancesBytes += sc.triggers.length * 20;
+  }
+
   let code = objects.length * 64 + events.length * 96 +
              dialogues.reduce((a, d) => a + (d.text || "").length + 64, 0) +
-             animations.reduce((a, an) => a + ((an.slots || []).length * 16) + 64, 0);
-  const total = sprites + audio + maps_b + code;
+             animations.reduce((a, an) => a + ((an.slots || []).length * 16) + 64, 0) +
+             instancesBytes;
+
+  const total = sprites + tilesetsBytes + audio + maps_b + code;
   const pct = Math.min(100, Math.round((total / projectLimitBytes) * 100));
 
   const txt = $("capacityText");
@@ -1299,7 +1570,7 @@ function updateCapacityBar() {
     else if (pct > 80) fill.style.background = "linear-gradient(90deg,#ffaa00,#fff25a)";
     else fill.style.background = "linear-gradient(90deg,#1fa84a,#4dff77)";
   }
-  if (br) br.textContent = `🎨 ${formatBytes(sprites)} · 🎵 ${formatBytes(audio)} · 🗺 ${formatBytes(maps_b)} · ⚙ ${formatBytes(code)}`;
+  if (br) br.textContent = `🎨 ${formatBytes(sprites)} · 🧱 ${formatBytes(tilesetsBytes)} · 🎵 ${formatBytes(audio)} · 🗺 ${formatBytes(maps_b)} · ⚙ ${formatBytes(code)}`;
 }
 
 function formatBytes(bytes) {
@@ -1307,6 +1578,10 @@ function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} Mo`;
 }
+
+// V1.5.6 — Expose pour que les modules (music-editor, sprite-editor) puissent l'appeler
+window.updateCapacityBar = updateCapacityBar;
+window.populateLibrary = function() { return populateLibrary(); };
 
 // ---------------------------------------------------------------------------
 // COMPAT V1.4 modules
@@ -1328,6 +1603,9 @@ function updateMemory() {
   refreshAllLists();
   updateCapacityBar();
 }
+
+// V1.5.6 — Hook compat pour sprite-editor V1.4 qui appelle window.updateMemory
+window.updateMemory = updateMemory;
 
 // =============================================================================
 // V1.5.3 — TILESETS : import, gestion, preview, sélection, rendu
