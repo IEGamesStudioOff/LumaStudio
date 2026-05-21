@@ -39,6 +39,67 @@
     return base * Math.pow(2, octave - 4);
   }
 
+  // V1.5.3 — Charge l'image du tileset, décode chaque tuile en RGB565
+  // dans un cache. Le rendu lit ce cache pour blitter pixel-perfect.
+  function loadTilesetForSim(ts) {
+    sim.tilesetReady = false;
+    sim.tilePixelCache = new Map();
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const tmp = document.createElement("canvas");
+        tmp.width = img.width;
+        tmp.height = img.height;
+        const tctx = tmp.getContext("2d");
+        tctx.imageSmoothingEnabled = false;
+        tctx.drawImage(img, 0, 0);
+        const tileSize = ts.tileSize;
+        for (let row = 0; row < ts.rows; row++) {
+          for (let col = 0; col < ts.cols; col++) {
+            const tileIdx = row * ts.cols + col;
+            const data = tctx.getImageData(col * tileSize, row * tileSize, tileSize, tileSize).data;
+            const px = new Uint16Array(tileSize * tileSize);
+            for (let i = 0; i < tileSize * tileSize; i++) {
+              const a = data[i * 4 + 3];
+              if (a < 128) {
+                px[i] = 0xF81F; // transparent magenta
+              } else {
+                const r5 = data[i * 4]     >> 3;
+                const g6 = data[i * 4 + 1] >> 2;
+                const b5 = data[i * 4 + 2] >> 3;
+                px[i] = (r5 << 11) | (g6 << 5) | b5;
+              }
+            }
+            sim.tilePixelCache.set(tileIdx, px);
+          }
+        }
+        sim.tilesetReady = true;
+      } catch (e) {
+        console.warn("Tileset decode failed:", e);
+      }
+    };
+    img.src = ts.dataUrl;
+  }
+
+  // V1.5.3 — Blit une tuile du tileset à (x,y), avec transparence et clipping
+  function blitTileFromTileset(x, y, tileSize, tileIdx) {
+    if (!sim.tilePixelCache) return false;
+    const px = sim.tilePixelCache.get(tileIdx);
+    if (!px) return false;
+    for (let row = 0; row < tileSize; row++) {
+      const py = y + row;
+      if (py < 0 || py >= SCREEN_H) continue;
+      for (let col = 0; col < tileSize; col++) {
+        const tx = x + col;
+        if (tx < 0 || tx >= SCREEN_W) continue;
+        const c = px[row * tileSize + col];
+        if (c === 0xF81F) continue;
+        sim.fb[py * SCREEN_W + tx] = c;
+      }
+    }
+    return true;
+  }
+
   // ---------------------------------------------------------------------------
   // STATE
   // ---------------------------------------------------------------------------
@@ -57,6 +118,10 @@
     player: { x: 32, y: 32, size: 12 },
     camera: { x: 0, y: 0 },
     sprite: null,     // { w, h, pixels } premier sprite trouvé
+    // V1.5.3 — Tileset support
+    tileset: null,            // tileset assigné à la map (objet complet)
+    tilePixelCache: null,     // Map<tileIdx, Uint16Array> — pixels RGB565 par tuile
+    tilesetReady: false,
     dialogue: null,   // texte affiché si non-null
     // input
     keys: {},
@@ -110,6 +175,18 @@
             break;
           } catch (e) {}
         }
+      }
+    }
+
+    // V1.5.3 — Charge le tileset assigné à la map
+    sim.tileset = null;
+    sim.tilePixelCache = null;
+    sim.tilesetReady = false;
+    if (sim.map && sim.map.tilesetId && typeof tilesets !== "undefined") {
+      const ts = tilesets.find(t => t.id === sim.map.tilesetId);
+      if (ts && ts.dataUrl) {
+        sim.tileset = ts;
+        loadTilesetForSim(ts);
       }
     }
 
@@ -258,8 +335,24 @@
         const py = ty * tile - sim.camera.y;
         const f = sim.map.layers.floor[idx] | 0;
         const d = sim.map.layers.decor[idx] | 0;
-        if (f) drawRect(px, py, tile, tile, TILE_PALETTE[f & 7]);
-        if (d) drawRect(px, py, tile, tile, TILE_PALETTE[(d + 2) & 7]);
+        // V1.5.3 — si tileset chargé, blit les vraies tuiles (index = valeur - 1)
+        if (sim.tilesetReady && sim.tileset) {
+          if (f) {
+            if (!blitTileFromTileset(px, py, tile, f - 1)) {
+              // fallback si l'index est hors range
+              drawRect(px, py, tile, tile, TILE_PALETTE[f & 7]);
+            }
+          }
+          if (d) {
+            if (!blitTileFromTileset(px, py, tile, d - 1)) {
+              drawRect(px, py, tile, tile, TILE_PALETTE[(d + 2) & 7]);
+            }
+          }
+        } else {
+          // Pas de tileset : couleurs solides palette
+          if (f) drawRect(px, py, tile, tile, TILE_PALETTE[f & 7]);
+          if (d) drawRect(px, py, tile, tile, TILE_PALETTE[(d + 2) & 7]);
+        }
       }
     }
 
