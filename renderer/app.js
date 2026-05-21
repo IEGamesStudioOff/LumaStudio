@@ -185,11 +185,26 @@ function setMode(mode) {
   const target = $(`${mode}Workspace`);
   if (target) target.classList.add("active");
   refreshTabs();
-  if (mode === "scene" && currentMap && currentScene) renderSceneEditor();
+  if (mode === "scene" && currentMap && currentScene) {
+    renderSceneEditor();
+    updateSceneHint();
+  }
   if (mode === "sprite") drawSpriteWorkspace();
   if (mode === "tileset") drawTilesetWorkspace();
   if (mode === "music"  && window.LumaMusicEditor)  window.LumaMusicEditor.init();
   if (mode === "objects" && window.LumaObjectEditor) window.LumaObjectEditor.init();
+}
+
+// V1.5.5 — Hint contextuel selon layer actif + outil
+function updateSceneHint() {
+  const layer = $("sceneLayer") ? $("sceneLayer").value : "floor";
+  const hints = {
+    floor:     "💡 Layer Floor — peint des tuiles de sol. Outil 🖊/🪣/⬜/⭕ + tuile sélectionnée.",
+    decor:     "💡 Layer Decor — peint par-dessus le sol (objets visuels, herbe, etc).",
+    collision: "💡 Layer Collision — clic = barrière invisible. La gomme l'enlève.",
+    objects:   "💡 Layer Objects — clic = place l'objet du menu. Tag 'solid' = collision auto !"
+  };
+  if ($("hint")) $("hint").textContent = hints[layer] || "Choisis un layer dans Scene Setup.";
 }
 
 function refreshTabs() {
@@ -289,6 +304,10 @@ $("createScene").addEventListener("click", () => {
 
 $("showGrid").addEventListener("change", () => renderSceneEditor());
 $("bgColor").addEventListener("input", () => renderSceneEditor());
+// V1.5.5 — hint contextuel quand on change de layer
+if ($("sceneLayer")) {
+  $("sceneLayer").addEventListener("change", () => updateSceneHint());
+}
 
 $("toggleCamera").addEventListener("click", () => {
   showCameraFrame = !showCameraFrame;
@@ -400,13 +419,22 @@ function handleMapClick(event) {
   const layer = $("sceneLayer") ? $("sceneLayer").value : "floor";
 
   if (tool === "paint") {
-    // V1.5.3 — délègue aux outils de peinture
+    // V1.5.5 — Le layer actif pilote ce qu'on dessine
     if (currentPaintTool === "pencil") {
-      paintTileAt(tx, ty, getPaintValue());
+      if (layer === "objects") {
+        placeObjectAt(tx, ty);
+      } else {
+        paintTileAt(tx, ty, getPaintValue());
+      }
     } else if (currentPaintTool === "eraser") {
-      paintTileAt(tx, ty, 0);
+      if (layer === "objects") {
+        eraseObjectsAtTile(tx, ty);
+      } else {
+        paintTileAt(tx, ty, 0);
+      }
     } else if (currentPaintTool === "bucket") {
-      floodFill(tx, ty, getPaintValue());
+      if (layer !== "objects") floodFill(tx, ty, getPaintValue());
+      else $("hint").textContent = "ℹ Le seau ne fonctionne pas sur le layer Objects.";
     }
     // rect/circle gérés au mouseup
   } else if (tool === "spawn") {
@@ -424,27 +452,99 @@ function handleMapClick(event) {
       w: currentMap.tileSize, h: currentMap.tileSize,
       action: "Start Dialogue", target: ""
     });
-  } else if (tool === "object") {
-    const picker = $("sceneObjectPicker");
-    const pickedId = picker ? picker.value : "";
-    if (!pickedId) {
-      $("hint").textContent = "⚠ Choisis un objet dans le menu déroulant avant de cliquer sur la map.";
-      return;
-    }
-    const o = objects.find(o => String(o.id) === String(pickedId));
-    if (!o) { $("hint").textContent = "⚠ Objet introuvable."; return; }
-    const f = frames.find(fr => fr.id === o.spriteFrameId);
-    currentScene.objects.push({
-      objectId: o.id,
-      instanceName: `${o.name}_${currentScene.objects.length + 1}`,
-      x: tx * currentMap.tileSize, y: ty * currentMap.tileSize,
-      layer: "objects", enabled: true, variables: {},
-      w: f ? f.w : 16, h: f ? f.h : 16
-    });
-    $("hint").textContent = `✅ ${o.name} placé en (${tx},${ty}).`;
   }
   renderSceneEditor();
   updateCapacityBar();
+}
+
+// V1.5.5 — Place l'objet du picker au tile (tx,ty). Auto-collision si tag "solid".
+function placeObjectAt(tx, ty) {
+  const picker = $("sceneObjectPicker");
+  const pickedId = picker ? picker.value : "";
+  if (!pickedId) {
+    $("hint").textContent = "⚠ Choisis un objet dans le menu déroulant pour le placer (Layer = Objects).";
+    return;
+  }
+  const o = objects.find(o => String(o.id) === String(pickedId));
+  if (!o) { $("hint").textContent = "⚠ Objet introuvable."; return; }
+  const f = frames.find(fr => fr.id === o.spriteFrameId);
+  const inst = {
+    objectId: o.id,
+    instanceName: `${o.name}_${currentScene.objects.length + 1}`,
+    x: tx * currentMap.tileSize, y: ty * currentMap.tileSize,
+    layer: "objects", enabled: true, variables: {},
+    w: f ? f.w : currentMap.tileSize, h: f ? f.h : currentMap.tileSize
+  };
+  currentScene.objects.push(inst);
+  // Auto-collision si tag "solid"
+  if (o.tags && o.tags.includes("solid")) {
+    setObjectCollisionTiles(inst, true);
+    $("hint").textContent = `✅ ${o.name} placé en (${tx},${ty}) + collision auto (tag solid).`;
+  } else {
+    $("hint").textContent = `✅ ${o.name} placé en (${tx},${ty}).`;
+  }
+}
+
+// V1.5.5 — Efface les objets dont le tile (tx,ty) est inclus dans leur bounding box.
+// Si l'objet était "solid", on retire la collision auto, mais SEULEMENT si aucun
+// autre objet solid restant n'occupe ce tile (la collision manuelle est préservée).
+function eraseObjectsAtTile(tx, ty) {
+  if (!currentScene || !currentMap) return;
+  const ts = currentMap.tileSize;
+  const toRemove = currentScene.objects.filter(inst => tileInInstance(inst, tx, ty, ts));
+  if (toRemove.length === 0) {
+    $("hint").textContent = "Aucun objet sur ce tile.";
+    return;
+  }
+  // Désactive d'abord la collision auto de ceux qui partent
+  for (const inst of toRemove) {
+    const obj = objects.find(o => o.id === inst.objectId);
+    if (obj && obj.tags && obj.tags.includes("solid")) {
+      setObjectCollisionTiles(inst, false, toRemove);
+    }
+  }
+  currentScene.objects = currentScene.objects.filter(inst => !toRemove.includes(inst));
+  $("hint").textContent = `🗑 ${toRemove.length} objet(s) retiré(s) du tile (${tx},${ty}).`;
+}
+
+function tileInInstance(inst, tx, ty, ts) {
+  const startTx = Math.floor(inst.x / ts);
+  const startTy = Math.floor(inst.y / ts);
+  const endTx = Math.floor((inst.x + (inst.w || ts) - 1) / ts);
+  const endTy = Math.floor((inst.y + (inst.h || ts) - 1) / ts);
+  return tx >= startTx && tx <= endTx && ty >= startTy && ty <= endTy;
+}
+
+// V1.5.5 — Marque/démarque la collision sous une instance d'objet solid.
+// Quand on démarque (on = false), vérifie qu'aucun AUTRE objet solid n'occupe
+// encore ce tile avant de retirer la collision (pour ne pas casser la collision
+// d'objets superposés).
+function setObjectCollisionTiles(inst, on, excludeList) {
+  if (!currentMap) return;
+  const ts = currentMap.tileSize;
+  const startTx = Math.floor(inst.x / ts);
+  const startTy = Math.floor(inst.y / ts);
+  const endTx = Math.floor((inst.x + (inst.w || ts) - 1) / ts);
+  const endTy = Math.floor((inst.y + (inst.h || ts) - 1) / ts);
+  excludeList = excludeList || [];
+  for (let ty = startTy; ty <= endTy; ty++) {
+    for (let tx = startTx; tx <= endTx; tx++) {
+      if (tx < 0 || ty < 0 || tx >= currentMap.width || ty >= currentMap.height) continue;
+      const idx = ty * currentMap.width + tx;
+      if (on) {
+        currentMap.layers.collision[idx] = 1;
+      } else {
+        // Vérifie si un autre objet solid occupe encore ce tile
+        const stillSolid = currentScene.objects.some(other => {
+          if (other === inst || excludeList.includes(other)) return false;
+          const oobj = objects.find(o => o.id === other.objectId);
+          if (!oobj || !oobj.tags || !oobj.tags.includes("solid")) return false;
+          return tileInInstance(other, tx, ty, ts);
+        });
+        if (!stillSolid) currentMap.layers.collision[idx] = 0;
+      }
+    }
+  }
 }
 
 // Drag-and-drop depuis library
@@ -481,13 +581,18 @@ mapCanvas.addEventListener("drop", (event) => {
     const o = objects.find(o => String(o.id) === String(objId));
     if (o) {
       const f = frames.find(fr => fr.id === o.spriteFrameId);
-      currentScene.objects.push({
+      const inst = {
         objectId: o.id,
         instanceName: `${o.name}_${currentScene.objects.length + 1}`,
         x: tx * tileSize, y: ty * tileSize,
         layer: "objects", enabled: true, variables: {},
         w: f ? f.w : 16, h: f ? f.h : 16
-      });
+      };
+      currentScene.objects.push(inst);
+      // V1.5.5 — auto-collision si tag "solid"
+      if (o.tags && o.tags.includes("solid")) {
+        setObjectCollisionTiles(inst, true);
+      }
       renderSceneEditor();
       refreshAllLists();
       updateCapacityBar();
@@ -508,13 +613,17 @@ mapCanvas.addEventListener("drop", (event) => {
         };
         objects.push(obj);
       }
-      currentScene.objects.push({
+      const inst = {
         objectId: obj.id,
         instanceName: `${obj.name}_${currentScene.objects.length + 1}`,
         x: tx * tileSize, y: ty * tileSize,
         layer: "objects", enabled: true, variables: {},
         w: f.w, h: f.h
-      });
+      };
+      currentScene.objects.push(inst);
+      if (obj.tags && obj.tags.includes("solid")) {
+        setObjectCollisionTiles(inst, true);
+      }
       renderSceneEditor();
       refreshAllLists();
       updateCapacityBar();
@@ -691,16 +800,26 @@ function drawPlacedObjects() {
           mapCtx.lineWidth = 1;
           mapCtx.strokeRect(obj.x + 0.5, obj.y + 0.5, frame.w - 1, frame.h - 1);
         }
+        // V1.5.5 — Indicateur visuel : tag "solid" → coin rouge en haut-droite
+        if (objDef.tags && objDef.tags.includes("solid")) {
+          mapCtx.fillStyle = "rgba(255,0,80,0.85)";
+          mapCtx.fillRect(obj.x + frame.w - 4, obj.y, 4, 4);
+        }
         drawn = true;
       }
     }
     if (!drawn) {
       const typeInfo = objDef ? OBJECT_TYPES.find(t => t.id === objDef.type) : null;
       mapCtx.fillStyle = typeInfo ? typeInfo.color : "#5fffaa";
-      mapCtx.fillRect(obj.x, obj.y, 14, 14);
+      const w = (obj.w || 14), h = (obj.h || 14);
+      mapCtx.fillRect(obj.x, obj.y, w, h);
       mapCtx.fillStyle = "#000";
       mapCtx.font = "8px monospace";
       mapCtx.fillText(objDef ? objDef.name.substring(0, 3).toUpperCase() : "?", obj.x + 1, obj.y + 10);
+      if (objDef && objDef.tags && objDef.tags.includes("solid")) {
+        mapCtx.fillStyle = "rgba(255,0,80,0.85)";
+        mapCtx.fillRect(obj.x + w - 4, obj.y, 4, 4);
+      }
     }
   }
 }

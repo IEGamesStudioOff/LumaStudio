@@ -1298,3 +1298,242 @@ input[type="number"] { width: 60px; }
   display: block;
   max-width: 100%;
 }
+
+/* =============================================================================
+   V1.5.5 — Music editor piano roll (styles de base manquants — bug fix)
+   ============================================================================= */
+
+/* Controls bar : tempo, steps, presets, play/stop */
+#musicPanel { padding: 4px; }
+#musicPanel .me-controls {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border: 2px solid #111;
+  background: #d8d8d8;
+  margin-bottom: 10px;
+  align-items: end;
+}
+#musicPanel .me-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#musicPanel .me-ctrl-group label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #333;
+  display: block;
+}
+#musicPanel .me-ctrl-group label strong {
+  color: var(--blue);
+  margin-left: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#musicPanel .me-ctrl-group input,
+#musicPanel .me-ctrl-group select {
+  background: #fff;
+  color: #000;
+  border: 1px solid #888;
+  padding: 3px 6px;
+  height: 24px;
+  font-size: 11px;
+}
+#musicPanel .me-ctrl-group input[type="range"] {
+  width: 140px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+#musicPanel .me-ctrl-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+#musicPanel .me-loop {
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px;
+  background: #eaeaea;
+  border: 1px solid #888;
+}
+#musicPanel .me-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #333;
+}
+#musicPanel .me-play,
+#musicPanel .me-stop,
+#musicPanel button.secondary,
+#musicPanel button.primary,
+#musicPanel .me-danger {
+  height: 28px;
+  padding: 4px 10px;
+  font-weight: 700;
+  border: 2px solid #111;
+  cursor: pointer;
+  font-size: 11px;
+}
+#musicPanel .me-play.primary,
+#musicPanel button.primary.me-play {
+  background: linear-gradient(180deg, #4dff77, #1fa84a);
+  color: #000;
+  border-color: #0d8a36;
+}
+#musicPanel button.secondary.me-stop {
+  background: #ff5e57;
+  color: #fff;
+  border-color: #b8231d;
+}
+#musicPanel button.secondary {
+  background: #c6c6c6;
+  color: #000;
+}
+#musicPanel .me-danger {
+  background: #ffd0d6;
+  color: #d22b3f;
+  border-color: #d22b3f;
+}
+
+/* 2 buzzers : track boxes empilées */
+#musicPanel .me-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#musicPanel .me-track-box {
+  border: 2px solid #111;
+  background: #eaeaea;
+  overflow: hidden;
+}
+#musicPanel .me-track-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: linear-gradient(180deg, #b8c5d8, #6a7a98);
+  border-bottom: 2px solid #111;
+}
+#musicPanel .me-track-head h3 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+#musicPanel .me-track-status {
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  background: rgba(0,0,0,0.4);
+  padding: 2px 8px;
+  border-radius: 2px;
+  color: #4dff77;
+  font-weight: 700;
+}
+
+/* Grid wrap : [piano labels] | [grid scroll horiz] */
+#musicPanel .me-grid-wrap {
+  display: flex;
+  background: #f2f2f2;
+}
+#musicPanel .me-piano {
+  display: flex;
+  flex-direction: column;
+  width: 40px;
+  background: #fafafa;
+  border-right: 2px solid #111;
+  flex-shrink: 0;
+}
+#musicPanel .me-key {
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 5px;
+  font-size: 9px;
+  color: #555;
+  border-bottom: 1px solid #ddd;
+  font-family: 'Courier New', monospace;
+  background: #fafafa;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+#musicPanel .me-key.sharp {
+  background: #2a2a2a;
+  color: #999;
+  border-bottom-color: #1a1a1a;
+}
+
+/* Grille scrollable horizontalement */
+#musicPanel .me-grid-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  max-height: 432px; /* 36 rows × 14px à peu près */
+}
+#musicPanel .me-grid {
+  display: grid;
+  grid-auto-rows: 14px;
+  background: #f8f8f8;
+}
+#musicPanel .me-cell {
+  width: 22px;
+  height: 14px;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fff;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.08s;
+}
+#musicPanel .me-cell.sharp-row { background: #f0f0f0; }
+#musicPanel .me-cell:hover {
+  background: rgba(91, 127, 255, 0.5);
+  box-shadow: inset 0 0 0 1px #5b7fff;
+}
+#musicPanel .me-cell.beat-line { border-left: 1px solid #aaa; }
+#musicPanel .me-cell.bar-line { border-left: 2px solid #444; }
+#musicPanel .me-cell.active {
+  background: var(--blue);
+  box-shadow: inset 0 0 0 1px #fff;
+}
+#musicPanel .me-cell.active-A {
+  background: linear-gradient(180deg, #4dff77, #1fa84a);
+  box-shadow: inset 0 0 0 1px #fff;
+}
+#musicPanel .me-cell.active-B {
+  background: linear-gradient(180deg, #ff5e57, #c43028);
+  box-shadow: inset 0 0 0 1px #fff;
+}
+
+/* Aiguille de lecture verticale */
+#musicPanel .me-playhead {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  background: #fff25a;
+  box-shadow: 0 0 8px #fff25a, 0 0 16px rgba(255,242,90,0.6);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Stats bar en bas */
+#musicPanel .me-stats {
+  background: #d8d8d8;
+  border: 2px solid #111;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #333;
+  margin-top: 10px;
+}
+#musicPanel .me-stats strong {
+  color: var(--blue);
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
