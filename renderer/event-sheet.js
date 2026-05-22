@@ -695,8 +695,11 @@
   }
 
   function persistAndUpdate() {
-    if (typeof window.updateCapacityBar === "function") window.updateCapacityBar();
-    if (typeof window.populateLibrary === "function") window.populateLibrary();
+    if (typeof window.requestFullRefresh === "function") window.requestFullRefresh();
+    else {
+      if (typeof window.updateCapacityBar === "function") window.updateCapacityBar();
+      if (typeof window.populateLibrary === "function") window.populateLibrary();
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -197,10 +197,14 @@
     renderForm();
     renderPreview();
     if (state.eventsExpanded) renderEventsBlock();
-    // V1.5.1 — sync l'object picker, library et capacity bar
-    if (typeof refreshObjectPicker === "function") refreshObjectPicker();
-    if (typeof populateLibrary === "function") populateLibrary();
-    if (typeof updateCapacityBar === "function") updateCapacityBar();
+    // V1.5.7+ — Resync solide via requestFullRefresh (rafraîchit library + capacity + scene)
+    if (typeof window.requestFullRefresh === "function") {
+      window.requestFullRefresh();
+    } else {
+      if (typeof refreshObjectPicker === "function") refreshObjectPicker();
+      if (typeof populateLibrary === "function") populateLibrary();
+      if (typeof updateCapacityBar === "function") updateCapacityBar();
+    }
   }
 
   function renderList() {

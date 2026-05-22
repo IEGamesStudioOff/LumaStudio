@@ -1921,3 +1921,54 @@ input[type="number"] { width: 60px; }
   border-top: 1px dashed #ccc;
   margin-top: 4px;
 }
+
+/* =============================================================================
+   V1.5.7 patch — Suppression sprites partout
+   ============================================================================= */
+
+/* Actions group sur les cards frame de l'Asset Lab */
+.frame-card-actions {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+}
+.frame-card-edit {
+  flex: 1;
+  font-size: 8px;
+  padding: 1px 4px;
+  background: var(--blue);
+  color: #fff;
+  border: 1px solid #000;
+  cursor: pointer;
+  font-weight: 700;
+}
+.frame-card-del {
+  width: 22px;
+  font-size: 10px;
+  padding: 1px 4px;
+  background: #ffd0d6;
+  color: #d22b3f;
+  border: 1px solid #d22b3f;
+  cursor: pointer;
+  font-weight: 700;
+}
+.frame-card-del:hover {
+  background: #d22b3f;
+  color: #fff;
+}
+
+/* Bouton SUPPRIMER dans le titlebar du sprite editor overlay */
+.spe-delete-frame {
+  background: #ff5e57;
+  color: #fff;
+  border: 2px solid #b8231d;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.spe-delete-frame:hover {
+  background: #b8231d;
+}

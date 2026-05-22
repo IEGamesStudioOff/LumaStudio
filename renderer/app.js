@@ -1284,7 +1284,10 @@ function drawFramesGrid() {
       <canvas width="${f.w}" height="${f.h}"></canvas>
       <span class="frame-card-name">${f.name}</span>
       <span class="frame-card-meta">${f.w}×${f.h}</span>
-      <button class="frame-card-edit">EDIT</button>
+      <div class="frame-card-actions">
+        <button class="frame-card-edit">EDIT</button>
+        <button class="frame-card-del" title="Supprimer ce sprite">🗑</button>
+      </div>
     `;
     const cv = card.querySelector("canvas");
     const cctx = cv.getContext("2d");
@@ -1310,6 +1313,10 @@ function drawFramesGrid() {
     card.querySelector(".frame-card-edit").onclick = (ev) => {
       ev.stopPropagation();
       if (window.LumaSpriteEditor) window.LumaSpriteEditor.open(i);
+    };
+    card.querySelector(".frame-card-del").onclick = (ev) => {
+      ev.stopPropagation();
+      deleteFrame(f);
     };
     grid.appendChild(card);
   }
@@ -1563,12 +1570,9 @@ function deleteFrame(f) {
   }
   const idx = frames.indexOf(f);
   if (idx >= 0) frames.splice(idx, 1);
-  refreshAllLists();
-  updateCapacityBar();
-  drawFramesGrid();
   if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
-  if (currentMap && currentScene) renderSceneEditor();
-  $("hint").textContent = `🗑 Sprite supprimé (${refsCount} objet(s) détaché(s)).`;
+  requestFullRefresh();
+  $("hint").textContent = `🗑 Sprite « ${f.name} » supprimé (${refsCount} objet(s) détaché(s)).`;
 }
 
 // V1.5.2 — Suppression objet depuis la library
@@ -1584,11 +1588,9 @@ function deleteObjectFromLib(o) {
   if (currentScene && currentScene.objects) {
     currentScene.objects = currentScene.objects.filter(i => i.objectId !== o.id);
   }
-  refreshAllLists();
-  updateCapacityBar();
   if (window.LumaObjectEditor) window.LumaObjectEditor.refresh();
-  if (currentMap && currentScene) renderSceneEditor();
-  $("hint").textContent = `🗑 Objet supprimé.`;
+  requestFullRefresh();
+  $("hint").textContent = `🗑 Objet « ${o.name} » supprimé.`;
 }
 
 // Peuple le menu déroulant "Objet à placer" dans la scene toolbar
@@ -1677,6 +1679,22 @@ function formatBytes(bytes) {
 // V1.5.6 — Expose pour que les modules (music-editor, sprite-editor) puissent l'appeler
 window.updateCapacityBar = updateCapacityBar;
 window.populateLibrary = function() { return populateLibrary(); };
+
+// V1.5.7+ — Point d'entrée unique appelé par TOUS les modules après mutation.
+// Garantit que la library, les pickers, les counts, la capacity bar sont sync.
+function requestFullRefresh() {
+  try { refreshAllLists(); } catch (e) { console.warn("refreshAllLists:", e); }
+  try { updateCapacityBar(); } catch (e) { console.warn("updateCapacityBar:", e); }
+  try { if (currentMap && currentScene && currentMode === "scene") renderSceneEditor(); }
+  catch (e) { console.warn("renderSceneEditor:", e); }
+  try { if (currentMode === "sprite") drawFramesGrid(); } catch (e) {}
+  try { if (window.LumaEventSheet && currentMode === "events") window.LumaEventSheet.refresh(); }
+  catch (e) {}
+}
+window.requestFullRefresh = requestFullRefresh;
+
+// V1.5.7+ — Exposer deleteFrame pour le bouton du sprite editor overlay
+window.deleteFrame = function(f) { return deleteFrame(f); };
 
 // V1.5.7 — Expose state pour event-sheet
 Object.defineProperty(window, "events", { get: () => events, configurable: true });

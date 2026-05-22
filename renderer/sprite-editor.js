@@ -1439,6 +1439,7 @@
         <button class="spe-nav" id="speNext" title="Frame suivante (Alt+→)">▶</button>
         <span class="spe-title" id="speTitle">—</span>
         <span class="spe-size" id="speSize">—</span>
+        <button id="speDeleteFrame" class="spe-delete-frame" title="Supprimer ce sprite du projet">🗑 SUPPRIMER</button>
         <button id="speCloseBtn" class="spe-close">FERMER (ESC)</button>
       </div>
       <div class="spe-body">
@@ -1605,6 +1606,21 @@
     $$("speCopy").onclick = copyFrameToClipboard;
     $$("spePaste").onclick = pasteFromClipboard;
     $$("speCloseBtn").onclick = closeOverlay;
+    // V1.5.7+ — Supprimer la frame courante depuis l'overlay sprite editor
+    const delBtn = $$("speDeleteFrame");
+    if (delBtn) {
+      delBtn.onclick = () => {
+        const f = (window.frames || frames || [])[state.frameIndex];
+        if (!f) return;
+        if (typeof deleteFrame === "function") {
+          closeOverlay();
+          deleteFrame(f);
+        } else if (typeof window.deleteFrame === "function") {
+          closeOverlay();
+          window.deleteFrame(f);
+        }
+      };
+    }
     $$("spePrev").onclick = prevFrame;
     $$("speNext").onclick = nextFrame;
     $$("speAddLayer").onclick = addLayer;
