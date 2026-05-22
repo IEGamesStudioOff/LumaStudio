@@ -284,10 +284,9 @@
   function init() {
     state.panel = document.getElementById("eventSheetPanel");
     if (!state.panel) return;
-    if (state.panel.dataset.built === "1") {
-      refresh();
-      return;
-    }
+    // V1.5.8 — Idempotent : rebuild complet à chaque init, l'état (selectedEventId,
+    // advancedMode) est préservé via le `state` interne du module. Élimine le bug
+    // où une 1ère construction cassée silencieusement laissait le panneau vide.
     state.panel.dataset.built = "1";
     state.panel.innerHTML = `
       <div class="es-toolbar">

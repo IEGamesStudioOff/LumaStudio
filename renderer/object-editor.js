@@ -148,7 +148,9 @@
   // ---------------------------------------------------------------------------
   function buildPanel() {
     panel = $$("logicPanel");
-    if (!panel || panel.dataset.built) return;
+    if (!panel) return;
+    // V1.5.8 — Idempotent : rebuild complet à chaque init pour garantir un panneau frais.
+    // L'état (state.selectedId, state.eventsExpanded) est préservé entre rebuilds.
     panel.dataset.built = "1";
     panel.innerHTML = `
       <div class="help-box">

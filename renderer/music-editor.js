@@ -180,7 +180,9 @@
 
   function buildPanel() {
     panel = $$("musicPanel");
-    if (!panel || panel.dataset.built) return;
+    if (!panel) return;
+    // V1.5.8 — Idempotent : on reconstruit toujours le DOM, mais on préserve l'état
+    // interne (audioCtx, playing) à travers les rebuilds. Plus de garde "built".
     panel.dataset.built = "1";
     panel.innerHTML = `
       <div class="help-box">
