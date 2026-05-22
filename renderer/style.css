@@ -2068,3 +2068,111 @@ input[type="number"] { width: 60px; }
   height: 18px;
   justify-self: start;
 }
+
+/* ==========================================================
+   V1.6.5 — Éditeur visuel du Menu Titre
+   ========================================================== */
+.title-menu-editor {
+  margin: 10px;
+  padding: 10px;
+  border: 1px solid rgba(125,249,255,.35);
+  border-radius: 12px;
+  background: rgba(7, 14, 30, .92);
+  box-shadow: 0 0 18px rgba(0, 255, 255, .08) inset;
+}
+.title-menu-editor.hidden { display: none; }
+.title-menu-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:8px; }
+.title-menu-head strong { color:#7df9ff; }
+.title-menu-head span { color:#a9b8d8; font-size:11px; }
+.title-menu-grid {
+  display:grid;
+  grid-template-columns: 120px minmax(80px, 1fr);
+  gap:6px 8px;
+  align-items:center;
+}
+.title-menu-grid label { color:#cfe7ff; font-size:12px; }
+.title-menu-grid input,
+.title-menu-grid select {
+  min-height:24px;
+  background:#0b1730;
+  color:#fff;
+  border:1px solid rgba(125,249,255,.25);
+  border-radius:8px;
+  padding:3px 6px;
+}
+.title-menu-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0; }
+.title-menu-actions select {
+  flex:1;
+  min-width:160px;
+  background:#0b1730;
+  color:#fff;
+  border:1px solid rgba(125,249,255,.25);
+  border-radius:8px;
+  padding:4px 6px;
+}
+.title-menu-columns {
+  display:grid;
+  grid-template-columns: minmax(180px, .8fr) minmax(240px, 1.2fr);
+  gap:10px;
+}
+.title-menu-list {
+  max-height:180px;
+  overflow:auto;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;
+  background:rgba(0,0,0,.18);
+  padding:6px;
+}
+.title-menu-item {
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  gap:6px;
+  align-items:center;
+  margin-bottom:5px;
+  padding:6px 8px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.04);
+  color:#fff;
+  cursor:pointer;
+  text-align:left;
+}
+.title-menu-item.active { border-color:#fff25a; box-shadow:0 0 0 1px rgba(255,242,90,.45) inset; }
+.title-menu-item small { color:#9fb5d8; }
+.title-menu-inspector { border-left:1px solid rgba(255,255,255,.08); padding-left:10px; }
+.btn.danger { background:#7c1025; color:#fff; }
+
+
+/* V1.6 — Music Editor multi-tracks + input focus fix */
+#musicPanel #meName { min-width: 180px; user-select: text; }
+#musicPanel .me-add-track { background: linear-gradient(180deg, #75d7ff, #3285ff); color: #06112a; }
+#musicPanel .me-track-tools { display: flex; align-items: center; gap: 8px; }
+#musicPanel .me-delete-track { height: 24px; min-width: 24px; padding: 0 7px; background: #ffd0d6; color: #d22b3f; border-color: #d22b3f; }
+#musicPanel .me-cell.active-C,
+#musicPanel .me-cell.active-D,
+#musicPanel .me-cell.active-E,
+#musicPanel .me-cell.active-F,
+#musicPanel .me-cell.active-G,
+#musicPanel .me-cell.active-H,
+#musicPanel .me-cell.active-I,
+#musicPanel .me-cell.active-J,
+#musicPanel .me-cell.active-K,
+#musicPanel .me-cell.active-L,
+#musicPanel .me-cell.active-M,
+#musicPanel .me-cell.active-N,
+#musicPanel .me-cell.active-O,
+#musicPanel .me-cell.active-P,
+#musicPanel .me-cell.active-Q,
+#musicPanel .me-cell.active-R,
+#musicPanel .me-cell.active-S,
+#musicPanel .me-cell.active-T,
+#musicPanel .me-cell.active-U,
+#musicPanel .me-cell.active-V,
+#musicPanel .me-cell.active-W,
+#musicPanel .me-cell.active-X,
+#musicPanel .me-cell.active-Y,
+#musicPanel .me-cell.active-Z {
+  background: linear-gradient(180deg, #75d7ff, #3285ff);
+  box-shadow: inset 0 0 0 1px #fff;
+}

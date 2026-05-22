@@ -89,6 +89,7 @@
             <div class="scenes-header">
               <span>📑 Scènes (<span id="scenesCount">0</span>)</span>
               <button id="addScene" class="btn tiny" title="Créer une nouvelle scène">+</button>
+              <button id="createTitleMenu" class="btn tiny" title="Créer une scène spéciale de menu titre">🏁</button>
             </div>
             <div id="scenesList" class="scenes-list">
               <p class="empty">Aucune scène.</p>
@@ -168,6 +169,7 @@
                   <option value="trigger">⚡ Trigger</option>
                   <option value="spawn">⭐ Spawn joueur</option>
                   <option value="camera">📷 Caméra</option>
+                  <option value="titleMenuMove">✋ Déplacer menu titre</option>
                 </select>
                 <select id="sceneObjectPicker" class="object-picker" title="Objet à placer sur la map">
                   <option value="">— Aucun objet —</option>
@@ -193,6 +195,70 @@
                   <span>Objects: <strong id="sceneObjectsMem">0</strong></span>
                   <span>Triggers: <strong id="sceneTriggersMem">0</strong></span>
                   <span>Total: <strong id="sceneTotalMem">0</strong></span>
+                </div>
+              </div>
+
+              <div id="titleMenuEditor" class="title-menu-editor hidden">
+                <div class="title-menu-head">
+                  <strong>🏁 Éditeur Menu Titre</strong>
+                  <span>Modifie textes, fond, images et positions</span>
+                </div>
+
+                <div class="title-menu-grid">
+                  <label>Fond couleur</label>
+                  <input id="tmBgColor" type="color" value="#000000">
+
+                  <label>Police défaut</label>
+                  <select id="tmDefaultFont">
+                    <option value="monospace">Monospace</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Courier New">Courier New</option>
+                  </select>
+
+                  <label>Scène START GAME</label>
+                  <select id="tmTargetScene"></select>
+                </div>
+
+                <div class="title-menu-actions">
+                  <button id="tmAddText" class="btn tiny">+ Texte</button>
+                  <button id="tmAddImage" class="btn tiny">+ Image</button>
+                  <button id="tmAddBgImage" class="btn tiny">+ Image de fond</button>
+                  <button id="tmImportBgImage" class="btn tiny">📂 Import fond</button>
+                  <select id="tmFrameSelect" title="Sprite/image disponible"></select>
+                </div>
+
+                <div class="title-menu-columns">
+                  <div>
+                    <label class="small-title">Éléments du menu</label>
+                    <div id="tmElementsList" class="title-menu-list"></div>
+                  </div>
+                  <div id="tmInspector" class="title-menu-inspector">
+                    <label class="small-title">Propriétés de l'élément sélectionné</label>
+                    <div class="title-menu-grid">
+                      <label>Texte</label>
+                      <input id="tmText" value="">
+                      <label>X</label>
+                      <input id="tmX" type="number" value="0">
+                      <label>Y</label>
+                      <input id="tmY" type="number" value="0">
+                      <label>Largeur</label>
+                      <input id="tmW" type="number" value="80">
+                      <label>Hauteur</label>
+                      <input id="tmH" type="number" value="16">
+                      <label>Taille texte</label>
+                      <input id="tmFontSize" type="number" value="14" min="4" max="48">
+                      <label>Couleur texte</label>
+                      <input id="tmColor" type="color" value="#ffffff">
+                      <label>Gras</label>
+                      <input id="tmBold" type="checkbox">
+                    </div>
+                    <div class="title-menu-actions">
+                      <button id="tmDeleteElement" class="btn tiny danger">🗑 Supprimer</button>
+                    </div>
+                    <p class="small-text">Astuce : choisis l'outil ✋ Déplacer menu titre, puis glisse le texte ou l'image directement sur l'écran.</p>
+                  </div>
                 </div>
               </div>
             </div>

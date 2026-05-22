@@ -81,6 +81,201 @@
     img.src = ts.dataUrl;
   }
 
+  function reloadSceneAssets() {
+    sim.tileset = null;
+    sim.tilePixelCache = null;
+    sim.tilesetReady = false;
+    if (sim.map && sim.map.tilesetId && typeof tilesets !== "undefined") {
+      const ts = tilesets.find(t => t.id === sim.map.tilesetId);
+      if (ts && ts.dataUrl) {
+        sim.tileset = ts;
+        loadTilesetForSim(ts);
+      }
+    }
+
+    sim.objectSpriteCache = new Map();
+    sim.titleMenuSpriteCache = new Map();
+    if (sim.scene && Array.isArray(sim.scene.objects)
+        && typeof objects !== "undefined" && typeof frames !== "undefined"
+        && window.LumaSpriteEditor) {
+      for (const inst of sim.scene.objects) {
+        const objDef = objects.find(o => o.id === inst.objectId);
+        if (!objDef || objDef.spriteFrameId == null) continue;
+        if (sim.objectSpriteCache.has(objDef.spriteFrameId)) continue;
+        const frame = frames.find(f => f.id === objDef.spriteFrameId);
+        if (!frame || !frame.pixelsB64) continue;
+        try {
+          const px = window.LumaSpriteEditor.base64ToPixels(frame.pixelsB64, frame.w * frame.h);
+          sim.objectSpriteCache.set(objDef.spriteFrameId, { w: frame.w, h: frame.h, pixels: px });
+        } catch (e) { /* skip */ }
+      }
+    }
+  }
+
+  function switchToScene(sc, opts = {}) {
+    if (!sc) return false;
+    if (opts.restart) restoreSceneInitialState(sc);
+    sim.scene = sc;
+    sim.map = (typeof maps !== "undefined") ? (maps.find(m => m.id === sc.mapId) || sim.map) : sim.map;
+    resetPlayerForScene(sc);
+    sim.dialogue = null;
+    sim._shake = null;
+    sim._shakeOffset = null;
+    reloadSceneAssets();
+    centerCamera();
+    if (window.LumaEventSheet) {
+      window.LumaEventSheet.runtime.activeCollisions.clear();
+      window.LumaEventSheet.runtime.everyTimers.clear();
+      window.LumaEventSheet.runTriggersOfType("on_scene_start", sim);
+    }
+    return true;
+  }
+
+  function startTitleMenuSelection() {
+    if (!sim.scene || sim.scene.type !== "title_menu") return false;
+    const cfg = sim.scene.titleMenu || {};
+    const optionIndex = cfg.selected || 0;
+    const options = Array.isArray(cfg.options) ? cfg.options : ["START GAME"];
+    const label = String(options[optionIndex] || "START GAME").toUpperCase();
+    if (label.includes("CREDIT")) {
+      sim._titleMessage = "CREE PAR I.E.GAMES_STUDIO";
+      playBeep("A", 659, 120);
+      return true;
+    }
+    if (label.includes("OPTION")) {
+      sim._titleMessage = "OPTIONS BIENTOT";
+      playBeep("A", 440, 120);
+      return true;
+    }
+    let target = cfg.targetSceneId;
+    let sc = null;
+    if (target && typeof scenes !== "undefined") sc = scenes.find(s => String(s.id) === String(target));
+    if (!sc && typeof scenes !== "undefined") sc = scenes.find(s => s && s.type !== "title_menu");
+    if (sc) {
+      playBeep("A", 880, 90);
+      return switchToScene(sc);
+    }
+    sim._titleMessage = "AUCUNE SCENE DE JEU";
+    playBeep("B", 220, 180);
+    return true;
+  }
+
+  function handleTitleMenuInput(btn) {
+    if (!sim.scene || sim.scene.type !== "title_menu") return false;
+    const cfg = sim.scene.titleMenu = sim.scene.titleMenu || {};
+    const opts = Array.isArray(cfg.options) && cfg.options.length ? cfg.options : ["START GAME"];
+    cfg.selected = Number(cfg.selected) || 0;
+    if (btn === "UP") {
+      cfg.selected = (cfg.selected - 1 + opts.length) % opts.length;
+      sim._titleMessage = "";
+      playBeep("A", 523, 45);
+      return true;
+    }
+    if (btn === "DOWN") {
+      cfg.selected = (cfg.selected + 1) % opts.length;
+      sim._titleMessage = "";
+      playBeep("A", 587, 45);
+      return true;
+    }
+    if (btn === "A" || btn === "START") return startTitleMenuSelection();
+    return true;
+  }
+
+  function hexToRgb565(hex, fallback = 0xFFFF) {
+    if (!hex || typeof hex !== "string") return fallback;
+    let h = hex.trim();
+    if (h[0] === "#") h = h.slice(1);
+    if (h.length === 3) h = h.split("").map(c => c + c).join("");
+    if (h.length !== 6) return fallback;
+    const r = parseInt(h.slice(0,2), 16), g = parseInt(h.slice(2,4), 16), b = parseInt(h.slice(4,6), 16);
+    if ([r,g,b].some(n => Number.isNaN(n))) return fallback;
+    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+  }
+
+  function getTitleMenuFramePixels(frameId) {
+    if (typeof frames === "undefined" || !window.LumaSpriteEditor) return null;
+    if (!sim.titleMenuSpriteCache) sim.titleMenuSpriteCache = new Map();
+    const key = String(frameId);
+    if (sim.titleMenuSpriteCache.has(key)) return sim.titleMenuSpriteCache.get(key);
+    const frame = frames.find(f => String(f.id) === key);
+    if (!frame || !frame.pixelsB64) return null;
+    try {
+      const px = window.LumaSpriteEditor.base64ToPixels(frame.pixelsB64, frame.w * frame.h);
+      const data = { w: frame.w, h: frame.h, pixels: px };
+      sim.titleMenuSpriteCache.set(key, data);
+      return data;
+    } catch (e) { return null; }
+  }
+
+  function drawTitleMenuFrame(frameId, x, y, w, h) {
+    const src = getTitleMenuFramePixels(frameId);
+    if (!src) return false;
+    x = x | 0; y = y | 0; w = Math.max(1, w | 0); h = Math.max(1, h | 0);
+    for (let yy = 0; yy < h; yy++) {
+      const sy = Math.min(src.h - 1, Math.floor(yy * src.h / h));
+      const dy = y + yy;
+      if (dy < 0 || dy >= SCREEN_H) continue;
+      for (let xx = 0; xx < w; xx++) {
+        const sx = Math.min(src.w - 1, Math.floor(xx * src.w / w));
+        const dx = x + xx;
+        if (dx < 0 || dx >= SCREEN_W) continue;
+        const c = src.pixels[sy * src.w + sx];
+        if (c === 0xF81F) continue;
+        sim.fb[dy * SCREEN_W + dx] = c;
+      }
+    }
+    return true;
+  }
+
+  function drawTitleMenuTextElement(el, cfg) {
+    let txt = String(el.text || "").toUpperCase();
+    if (el.role === "option" && (Number(el.optionIndex) || 0) === (Number(cfg.selected) || 0)) txt = "> " + txt;
+    const color = hexToRgb565(el.color, 0xFFFF);
+    const approxW = txt.length * 6;
+    let x = Number(el.x) || 0;
+    if ((el.align || "left") === "center") x -= Math.floor(approxW / 2);
+    if ((el.align || "left") === "right") x -= approxW;
+    drawText(x | 0, (Number(el.y) || 0) | 0, txt, color);
+  }
+
+  function renderTitleMenu() {
+    const cfg = sim.scene.titleMenu || {};
+    const elements = Array.isArray(cfg.elements) ? cfg.elements : null;
+    fillFramebuffer(hexToRgb565(cfg.backgroundColor || "#000000", 0x0000));
+
+    if (elements && elements.length) {
+      for (const el of elements.filter(e => e.type === "image" && e.isBackground)) {
+        drawTitleMenuFrame(el.frameId, Number(el.x) || 0, Number(el.y) || 0, Number(el.w) || 160, Number(el.h) || 128);
+      }
+      if (cfg.showBorder !== false) {
+        drawRect(4, 4, 152, 1, 0x18FF); drawRect(4, 123, 152, 1, 0x18FF);
+        drawRect(4, 4, 1, 120, 0x18FF); drawRect(155, 4, 1, 120, 0x18FF);
+      }
+      for (const el of elements.filter(e => e.type === "image" && !e.isBackground)) {
+        drawTitleMenuFrame(el.frameId, Number(el.x) || 0, Number(el.y) || 0, Number(el.w) || 16, Number(el.h) || 16);
+      }
+      for (const el of elements.filter(e => e.type === "text")) drawTitleMenuTextElement(el, cfg);
+      drawText(20, 112, sim._titleMessage || "Z/START: VALIDER", 0x5BFF);
+      return;
+    }
+
+    const title = cfg.title || "LUMA GAME";
+    const subtitle = cfg.subtitle || "PRESS START";
+    const opts = Array.isArray(cfg.options) && cfg.options.length ? cfg.options : ["START GAME"];
+    const selected = Number(cfg.selected) || 0;
+    drawRect(0, 0, SCREEN_W, SCREEN_H, 0x0000);
+    drawRect(4, 4, 152, 120, 0x18FF);
+    drawRect(7, 7, 146, 114, 0x0000);
+    drawText(Math.max(6, 80 - title.length * 3), 26, title, 0xFFFF);
+    drawText(Math.max(6, 80 - subtitle.length * 3), 42, subtitle, 0x07FF);
+    for (let i = 0; i < opts.length; i++) {
+      const y = 68 + i * 14;
+      const txt = (i === selected ? "> " : "  ") + String(opts[i]).toUpperCase();
+      drawText(36, y, txt, i === selected ? 0xFFE0 : 0xFFFF);
+    }
+    drawText(20, 112, sim._titleMessage || "Z/START: VALIDER", 0x5BFF);
+  }
+
   // V1.5.3 — Blit une tuile du tileset à (x,y), avec transparence et clipping
   function blitTileFromTileset(x, y, tileSize, tileIdx) {
     if (!sim.tilePixelCache) return false;
@@ -132,6 +327,7 @@
     voices: { A: null, B: null },
     // musique playback
     musicStart: 0,
+    musicEnabled: false,
     lastStepA: -1,
     lastStepB: -1,
     statsEl: null,
@@ -253,46 +449,15 @@
       }
     }
 
-    // V1.5.3 — Charge le tileset assigné à la map
-    sim.tileset = null;
-    sim.tilePixelCache = null;
-    sim.tilesetReady = false;
-    if (sim.map && sim.map.tilesetId && typeof tilesets !== "undefined") {
-      const ts = tilesets.find(t => t.id === sim.map.tilesetId);
-      if (ts && ts.dataUrl) {
-        sim.tileset = ts;
-        loadTilesetForSim(ts);
-      }
-    }
-
-    // V1.5.5 — Précharge les sprites RGB565 des objets placés dans la scène.
-    // Pour chaque instance d'objet → trouve l'objet définition → trouve sa frame
-    // → décode pixelsB64 → cache. Le rendu peut alors blitter chaque objet.
-    sim.objectSpriteCache = new Map();
-    if (sim.scene && Array.isArray(sim.scene.objects)
-        && typeof objects !== "undefined" && typeof frames !== "undefined"
-        && window.LumaSpriteEditor) {
-      for (const inst of sim.scene.objects) {
-        const objDef = objects.find(o => o.id === inst.objectId);
-        if (!objDef || objDef.spriteFrameId == null) continue;
-        if (sim.objectSpriteCache.has(objDef.spriteFrameId)) continue;
-        const frame = frames.find(f => f.id === objDef.spriteFrameId);
-        if (!frame || !frame.pixelsB64) continue;
-        try {
-          const px = window.LumaSpriteEditor.base64ToPixels(frame.pixelsB64, frame.w * frame.h);
-          sim.objectSpriteCache.set(objDef.spriteFrameId, {
-            w: frame.w, h: frame.h, pixels: px
-          });
-        } catch (e) { /* skip frame illisible */ }
-      }
-    }
+    reloadSceneAssets();
 
     // Boot audio
-    if (!sim.audioCtx) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      sim.audioCtx = new Ctx();
-    }
+    // On prépare le moteur audio, mais la musique ne démarre plus automatiquement.
+    // Elle démarre seulement via l'action Event Sheet "Lancer la musique".
+    ensureAudioUnlocked();
     sim.musicStart = performance.now();
+    sim.musicEnabled = false;
+    sim.lastMusicSteps = {};
     sim.lastStepA = -1;
     sim.lastStepB = -1;
 
@@ -353,22 +518,8 @@
         if (pending && pending.sceneId != null && typeof scenes !== "undefined") {
           const sc = scenes.find(s => String(s.id) === String(pending.sceneId));
           if (sc) {
-            if (pending.restart) {
-              console.log("[Sim] restart_scene →", sc.id);
-              restoreSceneInitialState(sc);
-            } else {
-              console.log("[Sim] change_scene →", sc.id);
-            }
-            sim.scene = sc;
-            sim.map = (typeof maps !== "undefined") ? (maps.find(m => m.id === sc.mapId) || sim.map) : sim.map;
-            resetPlayerForScene(sc);
-            sim.dialogue = null;
-            sim._shake = null;
-            sim._shakeOffset = null;
-            // reset runtime collisions + re-fire on_scene_start
-            window.LumaEventSheet.runtime.activeCollisions.clear();
-            window.LumaEventSheet.runtime.everyTimers.clear();
-            window.LumaEventSheet.runTriggersOfType("on_scene_start", sim);
+            console.log((pending.restart ? "[Sim] restart_scene →" : "[Sim] change_scene →"), sc.id);
+            switchToScene(sc, { restart: !!pending.restart });
           } else {
             console.warn("[Sim] change_scene/restart_scene : scène introuvable", pending.sceneId);
           }
@@ -407,6 +558,9 @@
   // ---------------------------------------------------------------------------
   function update() {
     if (!sim.map) return;
+    if (sim.scene && sim.scene.type === "title_menu") {
+      return;
+    }
     // V1.6.0 — Si un objet de type PLAYER a un behavior, on délègue à LumaBehaviors.
     const objs = window.objects || [];
     const playerDef = objs.find(o => o.type === "PLAYER");
@@ -489,6 +643,10 @@
   // ---------------------------------------------------------------------------
   function render() {
     fillFramebuffer(0x0000);
+    if (sim.scene && sim.scene.type === "title_menu") {
+      renderTitleMenu();
+      return;
+    }
     if (!sim.map) {
       drawText(16, 50, "NO MAP / SCENE", 0xF800);
       drawText(8, 64, "Crée une scène d'abord", 0x07FF);
@@ -744,6 +902,92 @@
   }
 
   // ---------------------------------------------------------------------------
+  // AUDIO PUBLIC — utilisé par l'Event Sheet
+  // ---------------------------------------------------------------------------
+  function ensureAudioUnlocked() {
+    try {
+      if (!sim.audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        sim.audioCtx = new Ctx();
+      }
+      // Dans Chromium/Electron, l'AudioContext peut être "suspended" tant
+      // qu'il n'y a pas eu d'interaction utilisateur. On tente donc resume()
+      // à chaque action son/musique déclenchée par l'Event Sheet.
+      if (sim.audioCtx.state === "suspended" && typeof sim.audioCtx.resume === "function") {
+        sim.audioCtx.resume().catch(() => {});
+      }
+      return sim.audioCtx;
+    } catch (err) {
+      console.warn("[Sim Audio] AudioContext impossible à initialiser", err);
+      return null;
+    }
+  }
+
+  function playEventSound(name) {
+    const ctx = ensureAudioUnlocked();
+    if (!ctx) return false;
+
+    const freqs = {
+      beep_short: 880, beep_long: 440, jump: 660, shoot: 1320,
+      hit: 220, pickup: 988, death: 110, door: 330, level_up: 1760
+    };
+    const freq = freqs[name] || 880;
+    const dur = name === "beep_long" ? 0.18 : 0.07;
+
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + dur + 0.02);
+      return true;
+    } catch (err) {
+      console.warn("[Sim Audio] Impossible de jouer le son", name, err);
+      return false;
+    }
+  }
+
+  function getMusicTrackIds() {
+    if (typeof music === "undefined" || !music.grid) return ["A", "B"];
+    const order = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    const ids = Object.keys(music.grid);
+    if (!ids.includes("A")) ids.push("A");
+    if (!ids.includes("B")) ids.push("B");
+    return ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }
+
+  function isMusicTrackLooping(track) {
+    if (typeof music === "undefined") return false;
+    if (track === "A") return music.loopA !== false;
+    if (track === "B") return music.loopB === true;
+    return !music.loops || music.loops[track] !== false;
+  }
+
+  function startEventMusic(name) {
+    const ctx = ensureAudioUnlocked();
+    if (!ctx) return false;
+
+    sim._musicName = name || (typeof music !== "undefined" ? music.name : "theme_01");
+    sim.musicEnabled = true;
+    sim.musicStart = performance.now();
+    sim.lastMusicSteps = {};
+    sim.lastStepA = -1;
+    sim.lastStepB = -1;
+    updateMusic();
+    return true;
+  }
+
+  function stopEventMusic() {
+    sim.musicEnabled = false;
+    stopAllVoices();
+  }
+
+  // ---------------------------------------------------------------------------
   // AUDIO — Web Audio square waves (forme d'onde piézo passif)
   // ---------------------------------------------------------------------------
   function playBeep(channel, freq, durMs) {
@@ -768,31 +1012,34 @@
   }
 
   function stopAllVoices() {
-    stopVoice("A"); stopVoice("B");
+    Object.keys(sim.voices || {}).forEach(stopVoice);
   }
 
-  // Joue la musique du projet en suivant music.grid + tempo + loop A/B
+  // Joue la musique du projet en suivant music.grid + tempo + loops par track.
   function updateMusic() {
+    if (!sim.musicEnabled) return;
     if (typeof music === "undefined" || !music.grid) return;
-    const beatMs = 60000 / music.tempo / 4;
+    ensureAudioUnlocked();
+    if (!sim.lastMusicSteps) sim.lastMusicSteps = {};
+    const beatMs = 60000 / (music.tempo || 120) / 4;
     const elapsed = performance.now() - sim.musicStart;
-    const step = Math.floor(elapsed / beatMs);
+    const rawStep = Math.floor(elapsed / beatMs);
+    const ids = getMusicTrackIds();
+    const allDone = ids.every(tr => !isMusicTrackLooping(tr) && rawStep >= music.steps);
+    if (allDone) { stopEventMusic(); return; }
 
-    const stepA = music.loopA ? step % music.steps : step;
-    const stepB = music.loopB ? step % music.steps : step;
-
-    if (stepA !== sim.lastStepA && stepA < (music.loopA ? music.steps : music.steps)) {
-      const cell = music.grid.A[stepA];
-      if (cell) playBeep("A", noteFreq(cell.note, cell.octave), beatMs * 0.9);
-      else stopVoice("A");
-      sim.lastStepA = stepA;
-    }
-    if (stepB !== sim.lastStepB && stepB < (music.loopB ? music.steps : music.steps)) {
-      const cell = music.grid.B[stepB];
-      if (cell) playBeep("B", noteFreq(cell.note, cell.octave), beatMs * 0.9);
-      else stopVoice("B");
-      sim.lastStepB = stepB;
-    }
+    ids.forEach(tr => {
+      const looping = isMusicTrackLooping(tr);
+      const step = looping ? rawStep % music.steps : rawStep;
+      if (step < 0 || step >= music.steps) return;
+      if (sim.lastMusicSteps[tr] === step) return;
+      const cell = music.grid[tr] && music.grid[tr][step];
+      if (cell) playBeep(tr, noteFreq(cell.note, cell.octave), beatMs * 0.9);
+      else stopVoice(tr);
+      sim.lastMusicSteps[tr] = step;
+      if (tr === "A") sim.lastStepA = step;
+      if (tr === "B") sim.lastStepB = step;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -810,6 +1057,10 @@
       // V1.5.9 — maintenir le set des boutons tenus
       if (!sim.heldButtons) sim.heldButtons = new Set();
       sim.heldButtons.add(btn);
+      if (!wasDown && sim.scene && sim.scene.type === "title_menu") {
+        handleTitleMenuInput(btn);
+        return;
+      }
       if (!wasDown && window.LumaEventSheet) {
         window.LumaEventSheet.runTriggersOfType("on_input_press", sim, (p) => p.button === btn);
       }
@@ -923,7 +1174,14 @@
   // ---------------------------------------------------------------------------
   // PUBLIC
   // ---------------------------------------------------------------------------
-  window.LumaSimulator = { open, close };
+  window.LumaSimulator = {
+    open,
+    close,
+    ensureAudio: ensureAudioUnlocked,
+    playSound: playEventSound,
+    playMusic: startEventMusic,
+    stopMusic: stopEventMusic
+  };
 
   document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("btnSimulate");

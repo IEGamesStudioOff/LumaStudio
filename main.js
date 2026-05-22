@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const os = require("os");
 
 let currentProjectPath = null;
+const closeAllowedWindows = new WeakSet();
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,6 +19,17 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false
+    }
+  });
+
+  win.on("close", (event) => {
+    if (closeAllowedWindows.has(win)) {
+      closeAllowedWindows.delete(win);
+      return;
+    }
+    event.preventDefault();
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.send("app:request-close");
     }
   });
 
@@ -79,6 +91,31 @@ function readJsonSafe(filePath, fallback) {
     return fallback;
   }
 }
+
+
+ipcMain.handle("app:confirm-save-before-close", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showMessageBox(win, {
+    type: "question",
+    title: "Sauvegarder le projet ?",
+    message: "Souhaitez-vous sauvegarder les dernières modifications avant de fermer ?",
+    detail: "Oui : le projet est sauvegardé automatiquement puis Luma Studio se ferme.\nNon : les dernières modifications non sauvegardées sont perdues et le programme se ferme.",
+    buttons: ["Oui, sauvegarder", "Non, fermer sans sauvegarder"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  });
+  return { ok: true, save: result.response === 0 };
+});
+
+ipcMain.handle("app:close-after-save-check", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) {
+    closeAllowedWindows.add(win);
+    win.close();
+  }
+  return { ok: true };
+});
 
 ipcMain.handle("project:create", async (_event, project) => {
   const result = await dialog.showOpenDialog({

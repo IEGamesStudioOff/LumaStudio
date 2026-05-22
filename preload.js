@@ -14,5 +14,14 @@ contextBridge.exposeInMainWorld("lumaAPI", {
   saveNarrative: (data) => ipcRenderer.invoke("narrative:save", data),
   saveSceneData: (data) => ipcRenderer.invoke("scene:save-v08", data),
   scanDrives: () => ipcRenderer.invoke("build:scan-drives"),
-  buildGame: (options) => ipcRenderer.invoke("build:game-v09", options)
+  buildGame: (options) => ipcRenderer.invoke("build:game-v09", options),
+
+  // Fermeture sécurisée : le renderer vérifie s'il y a des changements
+  // non sauvegardés, puis demande au main process d'afficher Oui/Non.
+  onAppCloseRequest: (callback) => {
+    ipcRenderer.removeAllListeners("app:request-close");
+    ipcRenderer.on("app:request-close", () => callback());
+  },
+  confirmSaveBeforeClose: () => ipcRenderer.invoke("app:confirm-save-before-close"),
+  closeAfterSaveCheck: () => ipcRenderer.invoke("app:close-after-save-check")
 });

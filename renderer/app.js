@@ -24,7 +24,7 @@ let nextObjectId = 1;
 let nextEventId = 1;
 let music = {
   name: "theme_01", tempo: 120, steps: 16,
-  loopA: true, loopB: false, preset: "blank",
+  loopA: true, loopB: false, loops: { A: true, B: false }, preset: "blank",
   grid: { A: new Array(16).fill(null), B: new Array(16).fill(null) },
   tracks: { A: [], B: [] }
 };
@@ -41,6 +41,11 @@ let camera = { x: 0, y: 0, w: 160, h: 128 };
 let testPlayer = { x: 32, y: 32, size: 12, active: false };
 let currentCutSteps = [];
 
+// V1.6.6 — Protection à la fermeture : détecte les modifications non sauvegardées.
+// On compare l'état du projet avec le dernier état sauvegardé/ouvert.
+let lastSavedProjectSnapshot = "";
+let _safeCloseInProgress = false;
+
 // V1.5.3 — Tilesets et outils de peinture
 let tilesets = [];
 let selectedTilesetId = null;
@@ -56,6 +61,12 @@ let sceneZoom = 1.0;             // facteur d'échelle CSS du canvas
 let _spaceHeld = false;           // touche Espace maintenue (mode pan)
 let _panDragging = false;
 let _panLast = null;
+
+// V1.6.5 — Éditeur visuel du menu titre
+let titleMenuSelectedElementId = null;
+let _titleMenuDragging = false;
+let _titleMenuDragOffset = { x: 0, y: 0 };
+
 
 const OBJECT_TYPES = [
   { id: "PLAYER",     label: "🧍 Player",     color: "#fff25a" },
@@ -153,6 +164,102 @@ function showScreen(name) {
   if (screens[name]) screens[name].classList.add("active");
 }
 
+
+// ---------------------------------------------------------------------------
+// SAVE / DIRTY STATE / SAFE CLOSE
+// ---------------------------------------------------------------------------
+function getProjectSavePayload() {
+  return {
+    frames,
+    animations,
+    tilesets,
+    objects,
+    events,
+    variables: [],
+    music,
+    dialogues,
+    cutscenes,
+    triggers,
+    maps,
+    scenes
+  };
+}
+
+function makeProjectSnapshot() {
+  try {
+    return JSON.stringify(getProjectSavePayload());
+  } catch (err) {
+    console.warn("[Luma Studio] Snapshot projet impossible", err);
+    return String(Date.now());
+  }
+}
+
+function markProjectSaved() {
+  lastSavedProjectSnapshot = makeProjectSnapshot();
+}
+
+function hasUnsavedProjectChanges() {
+  const studioVisible = screens.studio && screens.studio.classList.contains("active");
+  if (!studioVisible) return false;
+  if (!lastSavedProjectSnapshot) return false;
+  return makeProjectSnapshot() !== lastSavedProjectSnapshot;
+}
+
+async function saveCurrentProject(showMessage = true) {
+  try {
+    if (window.LumaMusicEditor) window.LumaMusicEditor.rebuildTracksFromGrid();
+    await window.lumaAPI.saveFrames(frames);
+    if (window.lumaAPI.saveAnimations) await window.lumaAPI.saveAnimations(animations);
+    if (window.lumaAPI.saveTilesets) await window.lumaAPI.saveTilesets(tilesets);
+    await window.lumaAPI.saveLogic({ objects, events, variables: [] });
+    await window.lumaAPI.saveMusic(music);
+    await window.lumaAPI.saveNarrative({ dialogues, cutscenes, triggers });
+    if (currentMap && currentScene) {
+      await window.lumaAPI.saveSceneData({ maps, scenes });
+    }
+    markProjectSaved();
+    if (showMessage && $("hint")) $("hint").textContent = "✅ Projet sauvegardé.";
+    return { ok: true };
+  } catch (err) {
+    if (showMessage && $("hint")) $("hint").textContent = "⚠ Sauvegarde partielle : " + err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+async function handleSafeCloseRequest() {
+  if (_safeCloseInProgress) return;
+  _safeCloseInProgress = true;
+
+  try {
+    if (hasUnsavedProjectChanges()) {
+      const choice = await window.lumaAPI.confirmSaveBeforeClose();
+      if (choice && choice.save) {
+        const saved = await saveCurrentProject(false);
+        if (!saved.ok) {
+          const forceClose = confirm(
+            "La sauvegarde automatique a échoué :\n\n" +
+            saved.error +
+            "\n\nVoulez-vous fermer quand même sans sauvegarder ?"
+          );
+          if (!forceClose) {
+            _safeCloseInProgress = false;
+            return;
+          }
+        }
+      }
+    }
+
+    await window.lumaAPI.closeAfterSaveCheck();
+  } catch (err) {
+    alert("Erreur pendant la fermeture : " + err.message);
+    _safeCloseInProgress = false;
+  }
+}
+
+if (window.lumaAPI && window.lumaAPI.onAppCloseRequest) {
+  window.lumaAPI.onAppCloseRequest(handleSafeCloseRequest);
+}
+
 // ---------------------------------------------------------------------------
 // PROJECT
 // ---------------------------------------------------------------------------
@@ -226,6 +333,7 @@ function enterStudio(path, data = null) {
     refreshAllLists();
     updateCapacityBar();
     if (currentMap && currentScene) renderSceneEditor();
+    markProjectSaved();
   }, 50);
 }
 
@@ -311,21 +419,7 @@ $("btnPlay").addEventListener("click", () => {
 });
 
 $("saveAll").addEventListener("click", async () => {
-  try {
-    if (window.LumaMusicEditor) window.LumaMusicEditor.rebuildTracksFromGrid();
-    await window.lumaAPI.saveFrames(frames);
-    if (window.lumaAPI.saveAnimations) await window.lumaAPI.saveAnimations(animations);
-    if (window.lumaAPI.saveTilesets) await window.lumaAPI.saveTilesets(tilesets);
-    await window.lumaAPI.saveLogic({ objects, events, variables: [] });
-    await window.lumaAPI.saveMusic(music);
-    await window.lumaAPI.saveNarrative({ dialogues, cutscenes, triggers });
-    if (currentMap && currentScene) {
-      await window.lumaAPI.saveSceneData({ maps, scenes });
-    }
-    $("hint").textContent = "✅ Projet sauvegardé.";
-  } catch (err) {
-    $("hint").textContent = "⚠ Sauvegarde partielle : " + err.message;
-  }
+  await saveCurrentProject(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -406,6 +500,90 @@ $("addScene").addEventListener("click", () => {
   $("mapId").value = mId;
   $("createScene").click();
 });
+
+// V1.6.4 — Outil rapide : créer une page de menu titre 160×128
+function createTitleMenuScene() {
+  const baseSceneId = "title_menu";
+  const baseMapId = "title_map";
+  let sceneId = baseSceneId;
+  let mapId = baseMapId;
+  let n = 2;
+  while (scenes.find(s => String(s.id) === sceneId)) {
+    sceneId = baseSceneId + "_" + n;
+    n++;
+  }
+  n = 2;
+  while (maps.find(m => String(m.id) === mapId)) {
+    mapId = baseMapId + "_" + n;
+    n++;
+  }
+
+  const w = 10, h = 8, tileSize = 16; // 10×8 tiles = 160×128, taille écran Luma
+  const newMap = {
+    id: mapId, width: w, height: h, tileSize,
+    layers: {
+      floor: new Array(w * h).fill(0),
+      decor: new Array(w * h).fill(0),
+      collision: new Array(w * h).fill(0)
+    },
+    tilesetId: null
+  };
+
+  const firstPlayable = scenes.find(s => s && s.type !== "title_menu");
+  const newScene = {
+    id: sceneId,
+    name: "Menu Titre",
+    type: "title_menu",
+    mapId,
+    music: music.name || "theme_01",
+    cameraMode: "fixed",
+    playerSpawn: { x: 32, y: 32 },
+    objects: [],
+    triggers: [],
+    titleMenu: {
+      backgroundColor: "#000000",
+      fontFamily: "monospace",
+      title: "LUMA GAME",
+      subtitle: "PRESS START",
+      options: ["START GAME", "OPTIONS", "CREDITS"],
+      selected: 0,
+      targetSceneId: firstPlayable ? firstPlayable.id : "",
+      elements: [
+        { id: "tm_title_" + Date.now(), type: "text", role: "title", text: "LUMA GAME", x: 80, y: 42, w: 150, h: 24, fontSize: 18, fontFamily: "monospace", color: "#ffffff", bold: true, align: "center" },
+        { id: "tm_subtitle_" + Date.now(), type: "text", role: "subtitle", text: "PRESS START", x: 80, y: 62, w: 150, h: 16, fontSize: 10, fontFamily: "monospace", color: "#7df9ff", bold: false, align: "center" },
+        { id: "tm_option_" + Date.now(), type: "text", role: "option", optionIndex: 0, text: "START GAME", x: 52, y: 82, w: 90, h: 14, fontSize: 12, fontFamily: "monospace", color: "#fff25a", bold: false, align: "left" },
+        { id: "tm_option2_" + Date.now(), type: "text", role: "option", optionIndex: 1, text: "OPTIONS", x: 52, y: 98, w: 90, h: 14, fontSize: 12, fontFamily: "monospace", color: "#ffffff", bold: false, align: "left" },
+        { id: "tm_option3_" + Date.now(), type: "text", role: "option", optionIndex: 2, text: "CREDITS", x: 52, y: 114, w: 90, h: 14, fontSize: 12, fontFamily: "monospace", color: "#ffffff", bold: false, align: "left" }
+      ]
+    }
+  };
+
+  maps.push(newMap);
+  scenes.unshift(newScene); // le simulateur démarre sur la première scène : menu titre en premier
+  currentMap = newMap;
+  currentScene = newScene;
+  camera = { x: 0, y: 0, w: 160, h: 128 };
+  testPlayer = { x: 32, y: 32, size: 12, active: false };
+
+  if ($("sceneName")) $("sceneName").value = sceneId;
+  if ($("mapId")) $("mapId").value = mapId;
+  if ($("mapW")) $("mapW").value = w;
+  if ($("mapH")) $("mapH").value = h;
+  if ($("gridSize")) $("gridSize").value = tileSize;
+  if ($("cameraMode")) $("cameraMode").value = "fixed";
+
+  setMode("scene");
+  renderSceneEditor();
+  refreshAllLists();
+  updateCapacityBar();
+  if ($("hint")) {
+    $("hint").textContent = "🏁 Menu titre créé. Dans le simulateur : ↑/↓ choisit, Z ou Entrée valide.";
+  }
+}
+
+if ($("createTitleMenu")) {
+  $("createTitleMenu").addEventListener("click", createTitleMenuScene);
+}
 
 // V1.5.6 — Redimensionner la map ACTIVE sans vider le contenu existant.
 // Le contenu de chaque layer est préservé dans la zone qui se recouvre.
@@ -1019,6 +1197,7 @@ function renderSceneEditor() {
   drawPlacedObjects();
   drawTriggers();
   drawSpawn();
+  drawTitleMenuOverlayPreview();
 
   if (testPlayer.active) {
     mapCtx.fillStyle = "#fff25a";
@@ -1034,6 +1213,96 @@ function renderSceneEditor() {
   $("mapInfo").textContent = `${currentScene.id} · ${currentMap.width}×${currentMap.height} tiles · écran 160×128`;
   renderLumaPreview();
   renderSceneMemory();
+}
+
+function drawTitleMenuOverlayPreview() {
+  // IMPORTANT : ne pas re-rendre le panneau HTML ici.
+  // Avant, renderSceneEditor() appelait cette fonction, qui rappelait renderTitleMenuEditor().
+  // Résultat : pendant la frappe dans les champs texte, l'inspecteur était reconstruit
+  // à chaque caractère, le focus sautait et les inputs semblaient impossibles à modifier.
+  if (!currentScene || currentScene.type !== "title_menu") {
+    return;
+  }
+  const cfg = ensureTitleMenuConfig(currentScene);
+  const elements = Array.isArray(cfg.elements) ? cfg.elements : [];
+
+  mapCtx.save();
+  mapCtx.fillStyle = cfg.backgroundColor || "#000000";
+  mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+  for (const el of elements.filter(e => e.type === "image" && e.isBackground)) drawTitleMenuImageElement(el);
+
+  if (cfg.showBorder !== false) {
+    mapCtx.strokeStyle = "rgba(100,220,255,0.9)";
+    mapCtx.lineWidth = 2;
+    mapCtx.strokeRect(6, 6, Math.max(20, mapCanvas.width - 12), Math.max(20, mapCanvas.height - 12));
+  }
+
+  for (const el of elements.filter(e => e.type === "image" && !e.isBackground)) drawTitleMenuImageElement(el);
+  for (const el of elements.filter(e => e.type === "text")) drawTitleMenuTextElement(el, cfg);
+
+  const selected = elements.find(e => e.id === titleMenuSelectedElementId);
+  if (selected) {
+    mapCtx.strokeStyle = "#fff25a";
+    mapCtx.setLineDash([3, 2]);
+    mapCtx.lineWidth = 1;
+    const box = getTitleMenuElementBox(selected);
+    mapCtx.strokeRect(box.x + 0.5, box.y + 0.5, Math.max(4, box.w) - 1, Math.max(4, box.h) - 1);
+    mapCtx.setLineDash([]);
+  }
+  mapCtx.restore();
+
+}
+
+function drawTitleMenuTextElement(el, cfg) {
+  const size = Math.max(4, Number(el.fontSize) || 12);
+  const family = el.fontFamily || cfg.fontFamily || "monospace";
+  mapCtx.font = `${el.bold ? "bold " : ""}${size}px ${family}`;
+  mapCtx.fillStyle = el.color || "#ffffff";
+  mapCtx.textBaseline = "middle";
+  mapCtx.textAlign = el.align || "left";
+  const x = Number(el.x) || 0;
+  const y = Number(el.y) || 0;
+  const prefix = (el.role === "option" && el.optionIndex === (cfg.selected || 0)) ? "> " : "";
+  mapCtx.fillText(prefix + String(el.text || ""), x, y);
+}
+
+function drawTitleMenuImageElement(el) {
+  const frame = frames.find(f => String(f.id) === String(el.frameId));
+  const cv = getCachedSpritePixels(frame);
+  const x = Number(el.x) || 0, y = Number(el.y) || 0;
+  const w = Math.max(1, Number(el.w) || (frame ? frame.w : 16));
+  const h = Math.max(1, Number(el.h) || (frame ? frame.h : 16));
+  if (cv) {
+    mapCtx.imageSmoothingEnabled = false;
+    mapCtx.drawImage(cv, x, y, w, h);
+  } else {
+    mapCtx.fillStyle = el.isBackground ? "#111827" : "#22314f";
+    mapCtx.fillRect(x, y, w, h);
+    mapCtx.strokeStyle = "#7df9ff";
+    mapCtx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    mapCtx.fillStyle = "#ffffff";
+    mapCtx.font = "8px monospace";
+    mapCtx.fillText("IMAGE", x + 3, y + 10);
+  }
+}
+
+function getTitleMenuElementBox(el) {
+  if (!el) return { x: 0, y: 0, w: 1, h: 1 };
+  if (el.type === "image") return {
+    x: Number(el.x) || 0,
+    y: Number(el.y) || 0,
+    w: Math.max(1, Number(el.w) || 16),
+    h: Math.max(1, Number(el.h) || 16)
+  };
+  const size = Math.max(4, Number(el.fontSize) || 12);
+  const text = String(el.text || "");
+  const w = Math.max(Number(el.w) || 0, text.length * Math.ceil(size * 0.62), 8);
+  const h = Math.max(Number(el.h) || 0, size + 4);
+  let x = Number(el.x) || 0;
+  if ((el.align || "left") === "center") x -= w / 2;
+  if ((el.align || "left") === "right") x -= w;
+  return { x, y: (Number(el.y) || 0) - h / 2, w, h };
 }
 
 function drawTileLayer(name, decor) {
@@ -1451,6 +1720,281 @@ $("buildGame").addEventListener("click", async () => {
   } catch (err) { log.textContent += "✗ " + err.message; }
 });
 
+
+// ---------------------------------------------------------------------------
+// V1.6.5 — ÉDITEUR VISUEL DU MENU TITRE
+// ---------------------------------------------------------------------------
+function ensureTitleMenuConfig(scene) {
+  if (!scene) return { elements: [] };
+  const cfg = scene.titleMenu = scene.titleMenu || {};
+  if (!cfg.backgroundColor) cfg.backgroundColor = "#000000";
+  if (!cfg.fontFamily) cfg.fontFamily = "monospace";
+  if (!Array.isArray(cfg.options) || cfg.options.length === 0) cfg.options = ["START GAME", "OPTIONS", "CREDITS"];
+  if (!Array.isArray(cfg.elements) || cfg.elements.length === 0) {
+    cfg.elements = [
+      { id: "tm_title_" + Date.now(), type: "text", role: "title", text: cfg.title || "LUMA GAME", x: 80, y: 42, w: 150, h: 24, fontSize: 18, fontFamily: cfg.fontFamily, color: "#ffffff", bold: true, align: "center" },
+      { id: "tm_subtitle_" + Date.now(), type: "text", role: "subtitle", text: cfg.subtitle || "PRESS START", x: 80, y: 62, w: 150, h: 16, fontSize: 10, fontFamily: cfg.fontFamily, color: "#7df9ff", bold: false, align: "center" },
+      ...cfg.options.map((label, i) => ({ id: "tm_option_" + Date.now() + "_" + i, type: "text", role: "option", optionIndex: i, text: label, x: 52, y: 82 + i * 16, w: 100, h: 14, fontSize: 12, fontFamily: cfg.fontFamily, color: i === (cfg.selected || 0) ? "#fff25a" : "#ffffff", bold: false, align: "left" }))
+    ];
+  }
+  return cfg;
+}
+
+function renderTitleMenuEditor() {
+  const panel = $("titleMenuEditor");
+  if (!panel) return;
+  if (!currentScene || currentScene.type !== "title_menu") {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  const cfg = ensureTitleMenuConfig(currentScene);
+  if ($("tmBgColor")) $("tmBgColor").value = cfg.backgroundColor || "#000000";
+  if ($("tmDefaultFont")) $("tmDefaultFont").value = cfg.fontFamily || "monospace";
+  renderTitleTargetSceneSelect();
+  renderTitleFrameSelect();
+  renderTitleElementsList();
+  renderTitleSelectedInspector();
+}
+
+function renderTitleTargetSceneSelect() {
+  const sel = $("tmTargetScene");
+  if (!sel || !currentScene) return;
+  const cfg = ensureTitleMenuConfig(currentScene);
+  const old = cfg.targetSceneId || "";
+  sel.innerHTML = '<option value="">— première scène de jeu —</option>' +
+    scenes.filter(s => s && s.type !== "title_menu").map(s => `<option value="${String(s.id).replace(/"/g, '&quot;')}">${s.name || s.id}</option>`).join("");
+  sel.value = old;
+}
+
+function renderTitleFrameSelect() {
+  const sel = $("tmFrameSelect");
+  if (!sel) return;
+  if (!frames.length) {
+    sel.innerHTML = '<option value="">— aucun sprite/image importé —</option>';
+    return;
+  }
+  sel.innerHTML = frames.map(f => `<option value="${f.id}">${f.name || ('frame_' + f.id)} · ${f.w}×${f.h}</option>`).join("");
+}
+
+function getSelectedTitleElement() {
+  if (!currentScene || currentScene.type !== "title_menu") return null;
+  const cfg = ensureTitleMenuConfig(currentScene);
+  return cfg.elements.find(e => e.id === titleMenuSelectedElementId) || cfg.elements[0] || null;
+}
+
+function renderTitleElementsList() {
+  const list = $("tmElementsList");
+  if (!list || !currentScene) return;
+  const cfg = ensureTitleMenuConfig(currentScene);
+  if (!titleMenuSelectedElementId && cfg.elements.length) titleMenuSelectedElementId = cfg.elements[0].id;
+  list.innerHTML = "";
+  cfg.elements.forEach((el, idx) => {
+    const btn = document.createElement("button");
+    btn.className = "title-menu-item" + (el.id === titleMenuSelectedElementId ? " active" : "");
+    btn.innerHTML = `<span>${el.type === "image" ? "🖼" : "🔤"} ${el.text || el.name || (el.isBackground ? "Image de fond" : "Image")}</span><small>${Math.round(el.x||0)},${Math.round(el.y||0)}</small>`;
+    btn.onclick = () => { titleMenuSelectedElementId = el.id; renderTitleMenuEditor(); renderSceneEditor(); };
+    list.appendChild(btn);
+  });
+}
+
+function renderTitleSelectedInspector() {
+  const el = getSelectedTitleElement();
+  const inspector = $("tmInspector");
+  if (!inspector) return;
+  const disabled = !el;
+  ["tmText","tmX","tmY","tmW","tmH","tmFontSize","tmColor","tmBold","tmDeleteElement"].forEach(id => { if ($(id)) $(id).disabled = disabled; });
+  if (!el) return;
+  if ($("tmText")) { $("tmText").value = el.type === "text" ? (el.text || "") : (el.name || "Image"); $("tmText").disabled = false; }
+  if ($("tmX")) $("tmX").value = Math.round(Number(el.x) || 0);
+  if ($("tmY")) $("tmY").value = Math.round(Number(el.y) || 0);
+  if ($("tmW")) $("tmW").value = Math.round(Number(el.w) || (el.type === "image" ? 32 : 80));
+  if ($("tmH")) $("tmH").value = Math.round(Number(el.h) || (el.type === "image" ? 32 : 16));
+  if ($("tmFontSize")) $("tmFontSize").value = Number(el.fontSize) || 12;
+  if ($("tmColor")) $("tmColor").value = el.color || "#ffffff";
+  if ($("tmBold")) $("tmBold").checked = !!el.bold;
+  const isText = el.type === "text";
+  if ($("tmFontSize")) $("tmFontSize").disabled = !isText;
+  if ($("tmColor")) $("tmColor").disabled = !isText;
+  if ($("tmBold")) $("tmBold").disabled = !isText;
+}
+
+function syncTitleMenuLegacyFields(cfg) {
+  if (!cfg || !Array.isArray(cfg.elements)) return;
+  const title = cfg.elements.find(e => e.role === "title");
+  const subtitle = cfg.elements.find(e => e.role === "subtitle");
+  const optionEls = cfg.elements.filter(e => e.role === "option").sort((a,b)=>(a.optionIndex||0)-(b.optionIndex||0));
+  if (title) cfg.title = title.text || cfg.title || "LUMA GAME";
+  if (subtitle) cfg.subtitle = subtitle.text || cfg.subtitle || "PRESS START";
+  if (optionEls.length) cfg.options = optionEls.map(e => e.text || "OPTION");
+}
+
+function applyTitleInspectorChange() {
+  const el = getSelectedTitleElement();
+  if (!el) return;
+
+  // On lit les champs sans reconstruire l'inspecteur complet, sinon le champ texte
+  // perd le focus pendant la frappe.
+  const textInput = $("tmText");
+  if (textInput) {
+    if (el.type === "text") el.text = textInput.value;
+    else el.name = textInput.value || el.name || "Image";
+  }
+  if ($("tmX")) el.x = Number($("tmX").value) || 0;
+  if ($("tmY")) el.y = Number($("tmY").value) || 0;
+  if ($("tmW")) el.w = Math.max(1, Number($("tmW").value) || 1);
+  if ($("tmH")) el.h = Math.max(1, Number($("tmH").value) || 1);
+  if (el.type === "text") {
+    if ($("tmFontSize")) el.fontSize = Math.max(4, Number($("tmFontSize").value) || 12);
+    if ($("tmColor")) el.color = $("tmColor").value || "#ffffff";
+    if ($("tmBold")) el.bold = $("tmBold").checked;
+  }
+  syncTitleMenuLegacyFields(currentScene.titleMenu);
+
+  // Mise à jour légère : liste + canvas seulement.
+  renderTitleElementsList();
+  renderSceneEditor();
+}
+
+function addTitleMenuText() {
+  if (!currentScene || currentScene.type !== "title_menu") return;
+  const cfg = ensureTitleMenuConfig(currentScene);
+  const el = { id: "tm_text_" + Date.now(), type: "text", text: "NOUVEAU TEXTE", x: 80, y: 70, w: 120, h: 18, fontSize: 12, fontFamily: cfg.fontFamily || "monospace", color: "#ffffff", bold: false, align: "center" };
+  cfg.elements.push(el);
+  titleMenuSelectedElementId = el.id;
+  renderTitleMenuEditor();
+  renderSceneEditor();
+}
+
+function addTitleMenuImage(isBackground) {
+  if (!currentScene || currentScene.type !== "title_menu") return;
+  const sel = $("tmFrameSelect");
+  const frameId = sel ? sel.value : "";
+  const frame = frames.find(f => String(f.id) === String(frameId));
+  if (!frame) return alert("Importe d'abord une image dans Sprite Editor, ou utilise le bouton 📂 Import fond.");
+  const cfg = ensureTitleMenuConfig(currentScene);
+  const el = { id: "tm_img_" + Date.now(), type: "image", name: isBackground ? "Image de fond" : (frame.name || "Image"), frameId: frame.id, x: isBackground ? 0 : 64, y: isBackground ? 0 : 48, w: isBackground ? 160 : frame.w, h: isBackground ? 128 : frame.h, isBackground: !!isBackground };
+  cfg.elements.push(el);
+  titleMenuSelectedElementId = el.id;
+  renderTitleMenuEditor();
+  renderSceneEditor();
+}
+
+async function importTitleMenuBackgroundImage() {
+  if (!window.lumaAPI || !window.lumaAPI.importImage) return alert("Import image indisponible dans cette version.");
+  const res = await window.lumaAPI.importImage();
+  if (!res || !res.ok || !res.dataUrl) return;
+  const img = new Image();
+  img.onload = () => {
+    const f = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      name: (res.name || "title_background").replace(/\.[^.]+$/, ""),
+      folder: "sprites", usage: 0,
+      x: 0, y: 0, w: 160, h: 128, rgb565Bytes: 160 * 128 * 2
+    };
+    const tmp = document.createElement("canvas");
+    tmp.width = 160; tmp.height = 128;
+    const ctx = tmp.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, 160, 128);
+    const data = ctx.getImageData(0, 0, 160, 128).data;
+    const arr = new Uint16Array(160 * 128);
+    for (let i = 0; i < arr.length; i++) {
+      const a = data[i * 4 + 3];
+      if (a < 128) arr[i] = 0xF81F;
+      else arr[i] = ((data[i*4] >> 3) << 11) | ((data[i*4+1] >> 2) << 5) | (data[i*4+2] >> 3);
+    }
+    if (window.LumaSpriteEditor) f.pixelsB64 = window.LumaSpriteEditor.pixelsToBase64(arr);
+    frames.push(f);
+    renderTitleFrameSelect();
+    const cfg = ensureTitleMenuConfig(currentScene);
+    const el = { id: "tm_bg_" + Date.now(), type: "image", name: "Image de fond", frameId: f.id, x: 0, y: 0, w: 160, h: 128, isBackground: true };
+    cfg.elements.unshift(el);
+    titleMenuSelectedElementId = el.id;
+    refreshAllLists();
+    renderTitleMenuEditor();
+    renderSceneEditor();
+    updateCapacityBar();
+  };
+  img.src = res.dataUrl;
+}
+
+function deleteSelectedTitleElement() {
+  if (!currentScene || currentScene.type !== "title_menu") return;
+  const cfg = ensureTitleMenuConfig(currentScene);
+  const el = getSelectedTitleElement();
+  if (!el) return;
+  cfg.elements = cfg.elements.filter(e => e !== el);
+  titleMenuSelectedElementId = cfg.elements[0] ? cfg.elements[0].id : null;
+  syncTitleMenuLegacyFields(cfg);
+  renderTitleMenuEditor();
+  renderSceneEditor();
+}
+
+function titleMenuElementAt(px, py) {
+  if (!currentScene || currentScene.type !== "title_menu") return null;
+  const cfg = ensureTitleMenuConfig(currentScene);
+  for (let i = cfg.elements.length - 1; i >= 0; i--) {
+    const el = cfg.elements[i];
+    const b = getTitleMenuElementBox(el);
+    if (px >= b.x && py >= b.y && px <= b.x + b.w && py <= b.y + b.h) return el;
+  }
+  return null;
+}
+
+function installTitleMenuEditorEvents() {
+  if ($("tmBgColor")) $("tmBgColor").addEventListener("input", () => { if (!currentScene) return; ensureTitleMenuConfig(currentScene).backgroundColor = $("tmBgColor").value; renderSceneEditor(); });
+  if ($("tmDefaultFont")) $("tmDefaultFont").addEventListener("change", () => { if (!currentScene) return; ensureTitleMenuConfig(currentScene).fontFamily = $("tmDefaultFont").value; renderSceneEditor(); });
+  if ($("tmTargetScene")) $("tmTargetScene").addEventListener("change", () => { if (!currentScene) return; ensureTitleMenuConfig(currentScene).targetSceneId = $("tmTargetScene").value; });
+  if ($("tmAddText")) $("tmAddText").addEventListener("click", addTitleMenuText);
+  if ($("tmAddImage")) $("tmAddImage").addEventListener("click", () => addTitleMenuImage(false));
+  if ($("tmAddBgImage")) $("tmAddBgImage").addEventListener("click", () => addTitleMenuImage(true));
+  if ($("tmImportBgImage")) $("tmImportBgImage").addEventListener("click", importTitleMenuBackgroundImage);
+  if ($("tmDeleteElement")) $("tmDeleteElement").addEventListener("click", deleteSelectedTitleElement);
+  ["tmText","tmX","tmY","tmW","tmH","tmFontSize","tmColor","tmBold"].forEach(id => {
+    if ($(id)) $(id).addEventListener(id === "tmBold" ? "change" : "input", applyTitleInspectorChange);
+  });
+}
+
+installTitleMenuEditorEvents();
+
+// Déplacement direct sur le canvas avec l'outil ✋ Déplacer menu titre.
+mapCanvas.addEventListener("mousedown", (e) => {
+  if (!currentScene || currentScene.type !== "title_menu") return;
+  if (!$('mapTool') || $('mapTool').value !== "titleMenuMove") return;
+  const pt = pixelToTile(e);
+  if (!pt) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const el = titleMenuElementAt(pt.px, pt.py);
+  if (el) {
+    const box = getTitleMenuElementBox(el);
+    titleMenuSelectedElementId = el.id;
+    _titleMenuDragging = true;
+    _titleMenuDragOffset = { x: pt.px - (Number(el.x) || 0), y: pt.py - (Number(el.y) || 0) };
+    if (el.type === "text" && (el.align || "left") === "center") _titleMenuDragOffset.x = pt.px - (Number(el.x) || 0);
+    renderTitleMenuEditor();
+    renderSceneEditor();
+  }
+}, true);
+
+mapCanvas.addEventListener("mousemove", (e) => {
+  if (!_titleMenuDragging) return;
+  const pt = pixelToTile(e);
+  if (!pt) return;
+  e.preventDefault();
+  const el = getSelectedTitleElement();
+  if (!el) return;
+  el.x = Math.max(0, Math.min(160, pt.px - _titleMenuDragOffset.x));
+  el.y = Math.max(0, Math.min(128, pt.py - _titleMenuDragOffset.y));
+  if ($("tmX")) $("tmX").value = Math.round(el.x);
+  if ($("tmY")) $("tmY").value = Math.round(el.y);
+  renderTitleElementsList();
+  renderSceneEditor();
+}, true);
+
+window.addEventListener("mouseup", () => { _titleMenuDragging = false; });
+
 // ---------------------------------------------------------------------------
 // LISTS — library + object picker (plus de right-inspector)
 // ---------------------------------------------------------------------------
@@ -1461,6 +2005,7 @@ function refreshAllLists() {
   drawTilesetSelectorGrid();
   renderScenesList();
   populateLibrary();
+  renderTitleMenuEditor();
 }
 
 // V1.5.6 — Liste des scènes du projet dans Scene Setup (gauche)
@@ -1510,6 +2055,7 @@ function switchToScene(s) {
   renderSceneEditor();
   renderScenesList();
   refreshTilesetSelectors();
+  renderTitleMenuEditor();
   drawTilesetSelectorGrid();
   $("hint").textContent = `📑 Scène active : « ${s.name || s.id} »`;
 }

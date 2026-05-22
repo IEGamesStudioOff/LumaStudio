@@ -364,8 +364,10 @@
     copy.id = nextId;
     copy.name = ev.name + " (copie)";
     arr.push(copy);
+    if (typeof window.setEvents === "function") window.setEvents(arr);
     state.selectedEventId = copy.id;
     refresh();
+    persistAndUpdate();
   }
 
   // ---------------------------------------------------------------------------
@@ -740,6 +742,33 @@
     _runtime.sceneStartFired = false;
   }
 
+  // V1.6.4 — Sécurisation : certains projets anciens peuvent contenir
+  // des events sans id, avec id dupliqué, ou des références qui changent pendant
+  // l'exécution. On travaille donc toujours sur une copie normalisée.
+  // Objectif : TOUS les events valides doivent pouvoir s'exécuter, pas seulement
+  // les 2 premiers ou ceux qui ont un id unique.
+  function getRuntimeEvents() {
+    const src = Array.isArray(window.events) ? window.events : [];
+    const seen = new Set();
+    return src.map((ev, index) => {
+      if (!ev || typeof ev !== "object") return null;
+      if (!ev.__runtimeKey) {
+        const base = ev.id != null && ev.id !== "" ? String(ev.id) : "event";
+        let key = base;
+        if (seen.has(key)) key = base + "_" + index;
+        // propriété non exportée dans JSON normalement, mais utile pendant la session
+        try { Object.defineProperty(ev, "__runtimeKey", { value: key, writable: true, configurable: true, enumerable: false }); }
+        catch (_) { ev.__runtimeKey = key; }
+      }
+      seen.add(ev.__runtimeKey);
+      return ev;
+    }).filter(Boolean);
+  }
+
+  function eventRuntimeKey(ev, fallbackIndex = 0) {
+    return ev && ev.__runtimeKey ? ev.__runtimeKey : String(ev && ev.id != null ? ev.id : fallbackIndex);
+  }
+
   // V1.6.2 — Helpers robustes pour éviter que les events cassent silencieusement.
   // Le Player est un objet spécial du simulateur, même s'il n'existe pas dans scene.objects.
   function ensureSceneObjects(sim) {
@@ -883,14 +912,28 @@
             runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
           }
         } else if (a.type === "play_sound") {
-          if (sim.audioCtx) playBeep(sim.audioCtx, p.sound);
-        } else if (a.type === "play_music") {
-          if (window.LumaMusicEditor && typeof window.LumaMusicEditor.playByName === "function") {
-            window.LumaMusicEditor.playByName(p.name);
-          } else if (sim.audioCtx) {
-            playBeep(sim.audioCtx, "level_up");
+          const soundName = p.sound || "beep_short";
+          if (window.LumaSimulator && typeof window.LumaSimulator.playSound === "function") {
+            window.LumaSimulator.playSound(soundName);
+          } else {
+            const ctx = ensureAudioContext(sim);
+            if (ctx) playBeep(ctx, soundName);
           }
-          sim._musicName = p.name;
+        } else if (a.type === "play_music") {
+          const musicName = p.name || "theme_01";
+          if (window.LumaSimulator && typeof window.LumaSimulator.playMusic === "function") {
+            window.LumaSimulator.playMusic(musicName);
+          } else {
+            const ctx = ensureAudioContext(sim);
+            if (ctx) {
+              sim.musicStart = performance.now();
+              sim.musicEnabled = true;
+              sim.lastStepA = -1;
+              sim.lastStepB = -1;
+              playBeep(ctx, "level_up");
+            }
+          }
+          sim._musicName = musicName;
         } else if (a.type === "change_scene") {
           _runtime.pendingSceneSwitch = { sceneId: p.scene, restart: false };
           return { wait: false, sceneSwitch: true };
@@ -949,58 +992,103 @@
     return { wait: false };
   }
 
+  function ensureAudioContext(sim) {
+    try {
+      if (window.LumaSimulator && typeof window.LumaSimulator.ensureAudio === "function") {
+        return window.LumaSimulator.ensureAudio();
+      }
+      if (!sim.audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        sim.audioCtx = new Ctx();
+      }
+      if (sim.audioCtx.state === "suspended" && typeof sim.audioCtx.resume === "function") {
+        sim.audioCtx.resume().catch(() => {});
+      }
+      return sim.audioCtx;
+    } catch (err) {
+      console.warn("[Event Sheet] AudioContext indisponible", err);
+      return null;
+    }
+  }
+
   function playBeep(ctx, name) {
     // Mapping simple : chaque "son" devient un bip square wave court
+    if (!ctx) return;
+    if (ctx.state === "suspended" && typeof ctx.resume === "function") {
+      ctx.resume().catch(() => {});
+    }
     const freqs = {
       beep_short: 880, beep_long: 440, jump: 660, shoot: 1320,
       hit: 220, pickup: 988, death: 110, door: 330, level_up: 1760
     };
     const f = freqs[name] || 440;
-    const dur = name === "beep_long" ? 0.18 : 0.06;
-    const osc = ctx.createOscillator();
-    osc.type = "square";
-    osc.frequency.value = f;
-    const g = ctx.createGain();
-    g.gain.value = 0.10;
-    osc.connect(g); g.connect(ctx.destination);
-    osc.start();
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-    osc.stop(ctx.currentTime + dur + 0.02);
+    const dur = name === "beep_long" ? 0.18 : 0.07;
+    try {
+      const osc = ctx.createOscillator();
+      osc.type = "square";
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.12, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + dur + 0.02);
+    } catch (err) {
+      console.warn("[Event Sheet] play_sound impossible", name, err);
+    }
   }
 
   // ---------------------------------------------------------------------------
   // API publique pour simulator
   // ---------------------------------------------------------------------------
   function runTriggersOfType(triggerType, sim, matchFn) {
-    const events = window.events || [];
+    // Important : on prend une copie de la liste des events au moment du trigger.
+    // Comme ça, si une action change une variable, détruit un objet, ou modifie
+    // indirectement le projet, la boucle ne s'arrête pas au milieu.
+    const events = getRuntimeEvents();
     const fired = [];
-    for (const ev of events) {
-      if (ev.enabled === false) continue;
-      if (!ev.trigger || ev.trigger.type !== triggerType) continue;
-      if (matchFn && !matchFn(ev.trigger.params || {})) continue;
-      if (evalConditions(ev.conditions, sim)) {
-        const res = runActions(ev.actions || [], sim);
-        if (res && res.wait) {
-          // Programme la suite après wait
-          setTimeout(() => {
-            if (evalConditions(ev.conditions, sim)) runActions(res.continuation, sim);
-          }, res.remaining);
+
+    for (let index = 0; index < events.length; index++) {
+      const ev = events[index];
+      try {
+        if (!ev || ev.enabled === false) continue;
+        if (!ev.trigger || ev.trigger.type !== triggerType) continue;
+        if (matchFn && !matchFn(ev.trigger.params || {})) continue;
+
+        if (evalConditions(ev.conditions || [], sim)) {
+          const res = runActions(ev.actions || [], sim);
+          if (res && res.wait) {
+            const continuation = Array.isArray(res.continuation) ? res.continuation.slice() : [];
+            const delay = Math.max(0, Number(res.remaining || 0));
+            setTimeout(() => {
+              try {
+                if (evalConditions(ev.conditions || [], sim)) runActions(continuation, sim);
+              } catch (err) {
+                console.warn("[Event Sheet] Suite d'event ignorée après wait:", ev.name || ev.id, err);
+              }
+            }, delay);
+          }
+          fired.push(ev.name || ("Event " + eventRuntimeKey(ev, index)));
         }
-        fired.push(ev.name);
+      } catch (err) {
+        console.warn("[Event Sheet] Event ignoré à cause d'une erreur:", ev && (ev.name || ev.id), err);
       }
     }
     return fired;
   }
 
   function tickTimers(sim, deltaMs) {
-    const events = window.events || [];
+    const events = getRuntimeEvents();
 
     // every_seconds (timers cycliques)
     for (const ev of events) {
       if (ev.enabled === false) continue;
       if (!ev.trigger || ev.trigger.type !== "every_seconds") continue;
       const intervalMs = Number(ev.trigger.params.seconds || 1) * 1000;
-      let acc = (_runtime.everyTimers.get(ev.id) || 0) + deltaMs;
+      const timerKey = eventRuntimeKey(ev);
+      let acc = (_runtime.everyTimers.get(timerKey) || 0) + deltaMs;
       if (acc >= intervalMs) {
         acc -= intervalMs;
         if (evalConditions(ev.conditions, sim)) {
@@ -1012,7 +1100,7 @@
           }
         }
       }
-      _runtime.everyTimers.set(ev.id, acc);
+      _runtime.everyTimers.set(timerKey, acc);
     }
 
     // V1.5.9 — on_input_hold : à chaque frame tant que le bouton est down
@@ -1025,7 +1113,7 @@
   // V1.5.9 — Pour chaque event on_input_hold dont le bouton est down, fire l'event
   function tickHoldTriggers(sim) {
     if (!sim || !sim.heldButtons) return;
-    const events = window.events || [];
+    const events = getRuntimeEvents();
     for (const ev of events) {
       if (ev.enabled === false) continue;
       if (!ev.trigger || ev.trigger.type !== "on_input_hold") continue;
@@ -1046,7 +1134,7 @@
   // Fire on_collision UNIQUEMENT à l'entrée (pas tant qu'on reste en contact).
   function tickCollisions(sim) {
     if (!sim || !sim.scene || !sim.scene.objects) return;
-    const events = window.events || [];
+    const events = getRuntimeEvents();
     const collisionEvents = events.filter(e =>
       e.enabled !== false && e.trigger && e.trigger.type === "on_collision");
     if (collisionEvents.length === 0) return;
@@ -1130,6 +1218,7 @@
     refresh,
     validateEvent,
     runTriggersOfType,
+    getRuntimeEvents,
     tickTimers,
     resetRuntime,
     // V1.5.9+ — Sim s'en sert pour switch/restart de scène après une action Event Sheet
