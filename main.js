@@ -690,6 +690,44 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
       inst.solid = !!obj.solid;
       inst.hp = obj.hp || 0;
       inst.speed = obj.speed || 0;
+      // V1.6.0 — Injecte les properties du behavior pour que ESP32 puisse les lire
+      // sans avoir à parser objects[] séparément. Pas exhaustif : on extrait les
+      // numériques classiques en prop_a/b/c/d (×10 pour fractionnels) + un target.
+      if (obj.properties) {
+        const p = obj.properties;
+        // Heuristique par behavior
+        if (obj.behavior === "PlatformerMovement") {
+          inst.prop_a = Math.round((p.gravity || 0.4) * 100);
+          inst.prop_b = Math.round((p.jumpForce || 5.5) * 10);
+          inst.prop_c = Math.round((p.maxSpeedX || 2.0) * 10);
+          inst.prop_d = Math.round((p.maxFallSpeed || 6.0) * 10);
+        } else if (obj.behavior === "FollowPlayer") {
+          inst.prop_a = Math.round((p.speed || 1.0) * 10);
+          inst.prop_c = p.detectionRange || 80;
+          inst.prop_d = p.stopRange || 8;
+        } else if (obj.behavior === "Patrol" || obj.behavior === "PatrolVertical") {
+          inst.prop_a = Math.round((p.speed || 1.0) * 10);
+          inst.prop_b = p.distance || 48;
+        } else if (obj.behavior === "Bounce") {
+          inst.prop_a = Math.round((p.speedX || 1.5) * 10);
+          inst.prop_b = Math.round((p.speedY || 1.5) * 10);
+        } else if (obj.behavior === "Pickup") {
+          inst.prop_a = p.scoreReward || 10;
+          inst.prop_target = p.scoreVariable || "score";
+        } else if (obj.behavior === "DamageOnTouch") {
+          inst.prop_a = p.damage || 1;
+          inst.prop_b = p.knockback || 6;
+          inst.prop_target = p.hpVariable || "hp";
+        } else if (obj.behavior === "Door") {
+          inst.prop_target = p.sceneId || "";
+          inst.prop_a = p.spawnX || 80;
+          inst.prop_b = p.spawnY || 64;
+        } else if (obj.behavior === "DialogueOnTouch") {
+          inst.prop_target = (p.text || "").substring(0, 23);
+        } else if (obj.behavior === "TopDownMovement") {
+          inst.prop_a = Math.round((p.speed || 2.0) * 10);
+        }
+      }
     }
   }
 

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define LUMA_VERSION "1.5.4"
+#define LUMA_VERSION "1.6.0"
 
 // Screen
 #define LUMA_LCD_WIDTH   160
@@ -79,11 +79,11 @@
 #define LUMA_MAX_VAR_NAME       24
 #define LUMA_MAX_VAR_VALUE      32
 
-// Boutons console (bitmask pour heldButtons)
-#define LUMA_BTN_UP     0x01
-#define LUMA_BTN_DOWN   0x02
-#define LUMA_BTN_LEFT   0x04
-#define LUMA_BTN_RIGHT  0x08
-#define LUMA_BTN_A      0x10
-#define LUMA_BTN_B      0x20
-#define LUMA_BTN_START  0x40
+// Boutons console (bitmask pour heldButtons) — distinct des GPIO LUMA_BTN_*
+#define LUMA_BTNMASK_UP     0x01
+#define LUMA_BTNMASK_DOWN   0x02
+#define LUMA_BTNMASK_LEFT   0x04
+#define LUMA_BTNMASK_RIGHT  0x08
+#define LUMA_BTNMASK_A      0x10
+#define LUMA_BTNMASK_B      0x20
+#define LUMA_BTNMASK_START  0x40

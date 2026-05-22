@@ -319,13 +319,13 @@ static bool match_button(const cJSON *trig_params, void *user) {
 }
 
 static const struct { uint8_t mask; const char *name; } BTNS[] = {
-    {LUMA_BTN_UP,    "UP"},
-    {LUMA_BTN_DOWN,  "DOWN"},
-    {LUMA_BTN_LEFT,  "LEFT"},
-    {LUMA_BTN_RIGHT, "RIGHT"},
-    {LUMA_BTN_A,     "A"},
-    {LUMA_BTN_B,     "B"},
-    {LUMA_BTN_START, "START"}
+    {LUMA_BTNMASK_UP,    "UP"},
+    {LUMA_BTNMASK_DOWN,  "DOWN"},
+    {LUMA_BTNMASK_LEFT,  "LEFT"},
+    {LUMA_BTNMASK_RIGHT, "RIGHT"},
+    {LUMA_BTNMASK_A,     "A"},
+    {LUMA_BTNMASK_B,     "B"},
+    {LUMA_BTNMASK_START, "START"}
 };
 
 void luma_events_on_button_press(luma_runtime_t *rt, uint8_t button_mask) {

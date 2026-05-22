@@ -68,6 +68,21 @@ typedef struct {
     uint8_t w;     // largeur hitbox (défaut sprite_w)
     uint8_t h;     // hauteur hitbox (défaut sprite_h)
     int16_t hp;    // points de vie (-1 si non applicable)
+    // V1.6.0 — Behavior runtime
+    char behavior[24];     // ex: "FollowPlayer", "Patrol", "Pickup"
+    int16_t spawn_x;       // pour les patrols : position d'origine
+    int16_t spawn_y;
+    int8_t dir;            // direction patrol (-1 / +1) ou bounce
+    int8_t vy;             // vélocité (bounce)
+    int8_t vx;
+    uint32_t last_dmg_ms;  // cooldown DamageOnTouch
+    bool one_shot_done;    // pour DialogueOnTouch oneShot
+    // Properties : on stocke 4 numeric génériques pour gravity/speed/distance/damage
+    int16_t prop_a;        // gravity*100 OU speed*10 OU damage OU scoreReward
+    int16_t prop_b;        // jumpForce*10 OU distance OU knockback
+    int16_t prop_c;        // maxSpeedX*10 OU detectionRange
+    int16_t prop_d;        // maxFallSpeed*10 OU stopRange
+    char prop_target[LUMA_MAX_NAME]; // sceneId pour Door, requiresKey, scoreVariable
 } luma_object_instance_t;
 
 typedef struct {

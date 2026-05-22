@@ -68,19 +68,72 @@ const OBJECT_TYPES = [
   { id: "DOOR",       label: "🚪 Door",       color: "#cccccc" }
 ];
 
+// V1.6.0 — Chaque behavior déclare ses params (rendus dynamiquement dans Object Editor).
+// Le runtime simulator (behaviors.js) lit ces params via obj.properties[paramKey].
 const OBJECT_BEHAVIORS = [
-  { id: "None",               label: "Aucun (statique)" },
-  { id: "PlatformerMovement", label: "🏃 Plateforme (jump+gravity)" },
-  { id: "TopDownMovement",    label: "🎮 Top-Down (4 directions)" },
-  { id: "FollowPlayer",       label: "👣 Suit le joueur" },
-  { id: "Patrol",             label: "↔ Patrouille horizontale" },
-  { id: "PatrolVertical",     label: "↕ Patrouille verticale" },
-  { id: "Bounce",             label: "🏀 Rebondit" },
-  { id: "Spinner",            label: "🔄 Tourne sur place" },
-  { id: "Pickup",             label: "💰 Ramassable" },
-  { id: "DialogueOnTouch",    label: "💬 Dialogue au contact" },
-  { id: "DamageOnTouch",      label: "💥 Inflige des dégâts" },
-  { id: "Door",               label: "🚪 Téléporte vers scène" }
+  { id: "None", label: "Aucun (statique)", params: [] },
+  { id: "PlatformerMovement", label: "🏃 Plateforme (jump+gravity)", target: "player",
+    params: [
+      { key: "gravity",     label: "Gravité (px/frame²)", type: "number", default: 0.4, min: 0,  max: 4 },
+      { key: "jumpForce",   label: "Force de saut (px/frame)", type: "number", default: 5.5, min: 1, max: 16 },
+      { key: "maxSpeedX",   label: "Vitesse horizontale max", type: "number", default: 2.0, min: 0.5, max: 8 },
+      { key: "maxFallSpeed",label: "Vitesse de chute max",    type: "number", default: 6.0, min: 1, max: 16 }
+    ] },
+  { id: "TopDownMovement", label: "🎮 Top-Down (4 directions)", target: "player",
+    params: [
+      { key: "speed",       label: "Vitesse (px/frame)", type: "number", default: 2.0, min: 0.5, max: 8 },
+      { key: "diagonal",    label: "Mouvement diagonal autorisé", type: "bool", default: false }
+    ] },
+  { id: "FollowPlayer", label: "👣 Suit le joueur", target: "instance",
+    params: [
+      { key: "speed",          label: "Vitesse de poursuite", type: "number", default: 1.0, min: 0.2, max: 4 },
+      { key: "detectionRange", label: "Distance de détection (px)", type: "number", default: 80, min: 16, max: 320 },
+      { key: "stopRange",      label: "Distance d'arrêt (px)", type: "number", default: 8, min: 0, max: 64 }
+    ] },
+  { id: "Patrol", label: "↔ Patrouille horizontale", target: "instance",
+    params: [
+      { key: "speed",    label: "Vitesse", type: "number", default: 1.0, min: 0.2, max: 4 },
+      { key: "distance", label: "Distance aller (px)", type: "number", default: 48, min: 8, max: 256 }
+    ] },
+  { id: "PatrolVertical", label: "↕ Patrouille verticale", target: "instance",
+    params: [
+      { key: "speed",    label: "Vitesse", type: "number", default: 1.0, min: 0.2, max: 4 },
+      { key: "distance", label: "Distance aller (px)", type: "number", default: 48, min: 8, max: 256 }
+    ] },
+  { id: "Bounce", label: "🏀 Rebondit", target: "instance",
+    params: [
+      { key: "speedX", label: "Vitesse X initiale", type: "number", default: 1.5, min: -8, max: 8 },
+      { key: "speedY", label: "Vitesse Y initiale", type: "number", default: 1.5, min: -8, max: 8 }
+    ] },
+  { id: "Spinner", label: "🔄 Tourne sur place", target: "instance",
+    params: [
+      { key: "rotationSpeed", label: "Vitesse rotation (deg/frame)", type: "number", default: 4, min: 1, max: 30 }
+    ] },
+  { id: "Pickup", label: "💰 Ramassable (au contact)", target: "instance",
+    params: [
+      { key: "scoreReward",    label: "Score ajouté",   type: "number", default: 10, min: 0, max: 9999 },
+      { key: "scoreVariable",  label: "Variable score", type: "string", default: "score" },
+      { key: "sound",          label: "Son", type: "enum",
+        options: ["pickup","beep_short","jump","level_up","beep_long"], default: "pickup" }
+    ] },
+  { id: "DialogueOnTouch", label: "💬 Dialogue au contact", target: "instance",
+    params: [
+      { key: "text",  label: "Texte", type: "string", default: "Bonjour aventurier !" },
+      { key: "oneShot", label: "Une seule fois", type: "bool", default: true }
+    ] },
+  { id: "DamageOnTouch", label: "💥 Inflige des dégâts au joueur", target: "instance",
+    params: [
+      { key: "damage",      label: "Dégâts par contact", type: "number", default: 1, min: 0, max: 99 },
+      { key: "knockback",   label: "Recul (px)", type: "number", default: 6, min: 0, max: 32 },
+      { key: "hpVariable",  label: "Variable HP joueur", type: "string", default: "hp" }
+    ] },
+  { id: "Door", label: "🚪 Téléporte vers scène", target: "instance",
+    params: [
+      { key: "sceneId",     label: "Scène cible", type: "scene_ref" },
+      { key: "spawnX",      label: "X spawn dans nouvelle scène", type: "number", default: 80 },
+      { key: "spawnY",      label: "Y spawn dans nouvelle scène", type: "number", default: 64 },
+      { key: "requiresKey", label: "Requiert variable (clé)", type: "string", default: "" }
+    ] }
 ];
 
 const $ = (id) => document.getElementById(id);

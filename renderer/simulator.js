@@ -283,7 +283,12 @@
             console.log("[Sim] change_scene →", sc.id);
             sim.scene = sc;
             sim.map = maps.find(m => m.id === sc.mapId) || sim.map;
-            if (sc.playerSpawn) {
+            // V1.6.0 — Si un Door behavior a défini un spawn custom, l'utilise
+            if (sim._doorSpawn) {
+              sim.player.x = sim._doorSpawn.x;
+              sim.player.y = sim._doorSpawn.y;
+              sim._doorSpawn = null;
+            } else if (sc.playerSpawn) {
               sim.player.x = sc.playerSpawn.x;
               sim.player.y = sc.playerSpawn.y;
             }
@@ -329,31 +334,55 @@
   // ---------------------------------------------------------------------------
   function update() {
     if (!sim.map) return;
-    const speed = 2;
-    let dx = 0, dy = 0;
-    if (sim.keys.ArrowLeft || sim.keys.q || sim.keys.a) dx = -speed;
-    if (sim.keys.ArrowRight || sim.keys.d) dx = speed;
-    if (sim.keys.ArrowUp || sim.keys.z || sim.keys.w) dy = -speed;
-    if (sim.keys.ArrowDown || sim.keys.s) dy = speed;
+    // V1.6.0 — Si un objet de type PLAYER a un behavior, on délègue à LumaBehaviors.
+    const objs = window.objects || [];
+    const playerDef = objs.find(o => o.type === "PLAYER");
+    const useBehaviorPlayer = playerDef && playerDef.behavior && playerDef.behavior !== "None"
+                              && window.LumaBehaviors;
 
-    if (dx !== 0) {
-      const nx = sim.player.x + dx;
-      if (canStandAt(nx, sim.player.y)) sim.player.x = nx;
-    }
-    if (dy !== 0) {
-      const ny = sim.player.y + dy;
-      if (canStandAt(sim.player.x, ny)) sim.player.y = ny;
+    if (useBehaviorPlayer) {
+      window.LumaBehaviors.updatePlayer(sim, TICK_MS);
+    } else {
+      // Legacy : TopDown libre 4 directions
+      const speed = 2;
+      let dx = 0, dy = 0;
+      if (sim.keys.ArrowLeft || sim.keys.q || sim.keys.a) dx = -speed;
+      if (sim.keys.ArrowRight || sim.keys.d) dx = speed;
+      if (sim.keys.ArrowUp || sim.keys.z || sim.keys.w) dy = -speed;
+      if (sim.keys.ArrowDown || sim.keys.s) dy = speed;
+      if (dx !== 0) {
+        const nx = sim.player.x + dx;
+        if (canStandAt(nx, sim.player.y)) sim.player.x = nx;
+      }
+      if (dy !== 0) {
+        const ny = sim.player.y + dy;
+        if (canStandAt(sim.player.x, ny)) sim.player.y = ny;
+      }
     }
 
-    // Boutons d'action (Z = A, X = B)
-    if (sim.keys.z && !sim.lastZ) {
-      sim.dialogue = "LUMA ENGINE 1.3";
-      playBeep("A", 880, 60);
+    // V1.6.0 — Update les behaviors d'instances (FollowPlayer, Patrol, Bounce, Spinner)
+    if (window.LumaBehaviors) {
+      window.LumaBehaviors.updateInstances(sim, TICK_MS);
+      window.LumaBehaviors.handleContacts(sim);
     }
-    sim.lastZ = !!sim.keys.z;
+
+    // Boutons d'action legacy (Z = A pour le mode sans player behavior)
+    if (!useBehaviorPlayer) {
+      if (sim.keys.z && !sim.lastZ) {
+        sim.dialogue = "LUMA ENGINE 1.6.0";
+        playBeep("A", 880, 60);
+      }
+      sim.lastZ = !!sim.keys.z;
+    }
     if (sim.keys.x && sim.dialogue) sim.dialogue = null;
 
     centerCamera();
+
+    // V1.6.0 — Door behavior peut déclencher un change_scene avec spawn custom
+    if (sim._doorSpawn && window.LumaEventSheet
+        && window.LumaEventSheet.runtime.pendingSceneSwitch) {
+      // Le simulator.loop consommera le pending et appliquera _doorSpawn comme position
+    }
   }
 
   function isSolidAt(px, py) {

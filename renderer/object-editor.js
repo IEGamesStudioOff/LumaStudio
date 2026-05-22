@@ -340,6 +340,8 @@
         <label>Behavior</label>
         <select id="oeBehavior">${behOptions}</select>
 
+        <div id="oeBehaviorParams" class="oe-behavior-params"></div>
+
         <label>🎨 Sprite (frame)</label>
         <select id="oeSprite">${frameOptions}</select>
 
@@ -366,7 +368,20 @@
 
     $$("oeName").oninput = (e) => renameObject(o, e.target.value);
     $$("oeType").onchange = (e) => { o.type = e.target.value; refresh(); };
-    $$("oeBehavior").onchange = (e) => { o.behavior = e.target.value; refresh(); };
+    $$("oeBehavior").onchange = (e) => {
+      o.behavior = e.target.value;
+      // V1.6.0 — Initialise properties par défaut pour le nouveau behavior
+      const beh = OBJECT_BEHAVIORS.find(b => b.id === o.behavior);
+      if (beh && beh.params) {
+        o.properties = o.properties || {};
+        for (const p of beh.params) {
+          if (o.properties[p.key] === undefined) o.properties[p.key] = p.default;
+        }
+      }
+      refresh();
+    };
+    // V1.6.0 — Render les params dynamiques pour le behavior choisi
+    renderBehaviorParams(o);
     $$("oeSprite").onchange = (e) => {
       const v = e.target.value;
       o.spriteFrameId = v ? (isNaN(Number(v)) ? v : Number(v)) : null;
@@ -391,6 +406,78 @@
     $$("oeSpeed").oninput = (e) => { o.speed = Math.max(0, Number(e.target.value) || 0); renderPreview(); };
     $$("oeDuplicate").onclick = () => duplicateObject(o);
     $$("oeDelete").onclick = () => deleteObject(o);
+  }
+
+  // V1.6.0 — Affiche les paramètres dynamiques selon le behavior choisi.
+  // Lit OBJECT_BEHAVIORS.find(...).params et génère un input par param.
+  function renderBehaviorParams(o) {
+    const wrap = $$("oeBehaviorParams");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    const beh = OBJECT_BEHAVIORS.find(b => b.id === o.behavior);
+    if (!beh || !beh.params || beh.params.length === 0) return;
+    o.properties = o.properties || {};
+
+    const title = document.createElement("div");
+    title.className = "oe-bp-title";
+    title.textContent = "⚙ Paramètres du behavior";
+    wrap.appendChild(title);
+
+    for (const p of beh.params) {
+      const row = document.createElement("label");
+      row.className = "oe-bp-row";
+      const lbl = document.createElement("span");
+      lbl.textContent = p.label;
+      row.appendChild(lbl);
+
+      let input;
+      const curVal = o.properties[p.key] !== undefined ? o.properties[p.key] : p.default;
+
+      if (p.type === "bool") {
+        input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !!curVal;
+        input.onchange = () => { o.properties[p.key] = input.checked; };
+      } else if (p.type === "enum") {
+        input = document.createElement("select");
+        for (const opt of p.options) {
+          const o2 = document.createElement("option");
+          o2.value = opt; o2.textContent = opt;
+          if (String(curVal) === String(opt)) o2.selected = true;
+          input.appendChild(o2);
+        }
+        input.onchange = () => { o.properties[p.key] = input.value; };
+      } else if (p.type === "scene_ref") {
+        input = document.createElement("select");
+        const empty = document.createElement("option");
+        empty.value = ""; empty.textContent = "— Choisir —";
+        input.appendChild(empty);
+        const scs = window.scenes || [];
+        for (const s of scs) {
+          const o2 = document.createElement("option");
+          o2.value = s.id; o2.textContent = s.name || s.id;
+          if (curVal === s.id) o2.selected = true;
+          input.appendChild(o2);
+        }
+        input.onchange = () => { o.properties[p.key] = input.value; };
+      } else if (p.type === "number") {
+        input = document.createElement("input");
+        input.type = "number";
+        if (p.min !== undefined) input.min = p.min;
+        if (p.max !== undefined) input.max = p.max;
+        input.step = "any";
+        input.value = curVal != null ? curVal : 0;
+        input.oninput = () => { o.properties[p.key] = Number(input.value); };
+      } else {
+        // string
+        input = document.createElement("input");
+        input.type = "text";
+        input.value = curVal != null ? curVal : "";
+        input.oninput = () => { o.properties[p.key] = input.value; };
+      }
+      row.appendChild(input);
+      wrap.appendChild(row);
+    }
   }
 
   function renderPreview() {

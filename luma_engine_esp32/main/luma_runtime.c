@@ -4,6 +4,7 @@
 #include "luma_audio.h"
 #include "luma_save.h"
 #include "luma_events.h"
+#include "luma_behaviors.h"
 #include "luma_config.h"
 #include <string.h>
 
@@ -70,13 +71,13 @@ void luma_runtime_update(luma_runtime_t *rt) {
 
     // V1.5.9 — Bitmask boutons pour event runtime
     uint8_t held = 0;
-    if (in.up)    held |= LUMA_BTN_UP;
-    if (in.down)  held |= LUMA_BTN_DOWN;
-    if (in.left)  held |= LUMA_BTN_LEFT;
-    if (in.right) held |= LUMA_BTN_RIGHT;
-    if (in.a)     held |= LUMA_BTN_A;
-    if (in.b)     held |= LUMA_BTN_B;
-    if (in.start) held |= LUMA_BTN_START;
+    if (in.up)    held |= LUMA_BTNMASK_UP;
+    if (in.down)  held |= LUMA_BTNMASK_DOWN;
+    if (in.left)  held |= LUMA_BTNMASK_LEFT;
+    if (in.right) held |= LUMA_BTNMASK_RIGHT;
+    if (in.a)     held |= LUMA_BTNMASK_A;
+    if (in.b)     held |= LUMA_BTNMASK_B;
+    if (in.start) held |= LUMA_BTNMASK_START;
     rt->held_buttons = held;
 
     int speed = 2;
@@ -102,6 +103,11 @@ void luma_runtime_update(luma_runtime_t *rt) {
 
     // V1.5.9 — Tick le runtime events (collisions, hold inputs, timers, dialogue)
     luma_events_tick(rt, 33); // ~30 FPS = 33ms par frame
+
+    // V1.6.0 — Tick les behaviors d'instances (Patrol, Bounce, FollowPlayer) +
+    // contact handlers (Pickup, Damage, Door, Dialogue)
+    luma_behaviors_tick(rt);
+    luma_behaviors_handle_contacts(rt);
 
     if (in.a && !rt->dialogue_active) {
         rt->dialogue_active = true;
