@@ -1733,7 +1733,8 @@ function formatBytes(bytes) {
 
 // V1.5.6 — Expose pour que les modules (music-editor, sprite-editor) puissent l'appeler
 window.updateCapacityBar = updateCapacityBar;
-window.populateLibrary = function() { return populateLibrary(); };
+// V1.5.8 — Assignation directe (PAS un wrapper qui s'auto-appelle = stack overflow !)
+window.populateLibrary = populateLibrary;
 
 // V1.5.7+ — Point d'entrée unique appelé par TOUS les modules après mutation.
 // Garantit que la library, les pickers, les counts, la capacity bar sont sync.
@@ -1749,7 +1750,8 @@ function requestFullRefresh() {
 window.requestFullRefresh = requestFullRefresh;
 
 // V1.5.7+ — Exposer deleteFrame pour le bouton du sprite editor overlay
-window.deleteFrame = function(f) { return deleteFrame(f); };
+// V1.5.8 — Assignation directe (pas un wrapper qui s'auto-appelle)
+window.deleteFrame = deleteFrame;
 
 // V1.5.7 — Expose state pour event-sheet
 Object.defineProperty(window, "events", { get: () => events, configurable: true });

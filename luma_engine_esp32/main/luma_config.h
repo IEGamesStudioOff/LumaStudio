@@ -70,3 +70,20 @@
 #define LUMA_CYAN    0x07FF
 #define LUMA_MAGENTA 0xF81F
 #define LUMA_GRAY    0x8410
+
+// V1.5.9 — Event Sheet runtime
+#define LUMA_MAX_EVENTS         64    // events par scène
+#define LUMA_MAX_EVENT_ACTIONS  16    // actions par event
+#define LUMA_MAX_EVENT_CONDS    8     // conditions par event
+#define LUMA_MAX_VARIABLES      32    // variables globales
+#define LUMA_MAX_VAR_NAME       24
+#define LUMA_MAX_VAR_VALUE      32
+
+// Boutons console (bitmask pour heldButtons)
+#define LUMA_BTN_UP     0x01
+#define LUMA_BTN_DOWN   0x02
+#define LUMA_BTN_LEFT   0x04
+#define LUMA_BTN_RIGHT  0x08
+#define LUMA_BTN_A      0x10
+#define LUMA_BTN_B      0x20
+#define LUMA_BTN_START  0x40

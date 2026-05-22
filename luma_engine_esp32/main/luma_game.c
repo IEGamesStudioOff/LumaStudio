@@ -1,6 +1,7 @@
 #include "luma_game.h"
 #include "luma_sd.h"
 #include "luma_lpk.h"
+#include "luma_events.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include <string.h>
@@ -231,6 +232,15 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
     ESP_LOGI(TAG, "Loaded scene: %s (map %dx%d, tile %d, %d objects)",
              rt->active_scene.id, rt->active_map.width, rt->active_map.height,
              rt->active_map.tile_size, rt->object_count);
+
+    // V1.5.9 — Initialise le runtime events (parse events JSON top-level du game)
+    cJSON *events_arr = cJSON_GetObjectItem(s_game_json, "events");
+    if (events_arr && cJSON_IsArray(events_arr)) {
+        luma_events_init(rt, events_arr);
+        luma_events_on_scene_start(rt);
+    } else {
+        luma_events_init(rt, NULL);
+    }
     return true;
 }
 

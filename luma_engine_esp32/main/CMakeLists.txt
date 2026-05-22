@@ -9,6 +9,7 @@ idf_component_register(
         "luma_input.c"
         "luma_audio.c"
         "luma_save.c"
+        "luma_events.c"
     INCLUDE_DIRS "."
     REQUIRES
         driver

@@ -64,6 +64,10 @@ typedef struct {
     char sprite_name[LUMA_MAX_NAME];
     uint16_t sprite_w;
     uint16_t sprite_h;
+    // V1.5.9 — Pour le runtime events (collisions AABB, dégâts)
+    uint8_t w;     // largeur hitbox (défaut sprite_w)
+    uint8_t h;     // hauteur hitbox (défaut sprite_h)
+    int16_t hp;    // points de vie (-1 si non applicable)
 } luma_object_instance_t;
 
 typedef struct {
@@ -114,4 +118,27 @@ typedef struct {
     uint16_t player_sprite_pixels[LUMA_MAX_SPRITE_PIXELS];
     // V1.5.4 : tileset RGB565 préchargé pour la map active
     luma_tileset_t active_tileset;
+
+    // V1.5.9 — Event Sheet runtime
+    // On stocke les events sous forme de pointeurs cJSON ; le runtime parse au boot
+    // les types/params via le cJSON. Pas besoin de structs typées explosives.
+    void *events_json;            // cJSON* tableau d'events (NULL si vide)
+    int event_count;
+    // Variables globales
+    char var_names[LUMA_MAX_VARIABLES][LUMA_MAX_VAR_NAME];
+    char var_values[LUMA_MAX_VARIABLES][LUMA_MAX_VAR_VALUE];
+    int var_count;
+    // Inputs
+    uint8_t held_buttons;         // bitmask LUMA_BTN_*
+    uint8_t prev_held_buttons;
+    // Timers per-event (ms accumulés pour every_seconds)
+    uint32_t event_timers[LUMA_MAX_EVENTS];
+    // Collisions actives (pour ne fire qu'à l'entrée)
+    uint32_t active_collisions[LUMA_MAX_EVENTS]; // packed: (idA<<16)|idB
+    int active_collision_count;
+    // Pending scene switch (action change_scene différée)
+    char pending_scene_switch[LUMA_MAX_NAME];
+    // V1.5.9 — dialogue_remaining_ms drives l'auto-clear de dialogue_text (déjà existant
+    // dans la struct au-dessus). On laisse dialogue_active inchangé pour compat.
+    uint32_t dialogue_remaining_ms;
 } luma_runtime_t;

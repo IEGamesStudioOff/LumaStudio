@@ -3,6 +3,8 @@
 #include "luma_render.h"
 #include "luma_audio.h"
 #include "luma_save.h"
+#include "luma_events.h"
+#include "luma_config.h"
 #include <string.h>
 
 #define PLAYER_DEFAULT_SIZE 12
@@ -66,6 +68,17 @@ static void clamp_camera(luma_runtime_t *rt) {
 void luma_runtime_update(luma_runtime_t *rt) {
     luma_input_t in = luma_input_read();
 
+    // V1.5.9 — Bitmask boutons pour event runtime
+    uint8_t held = 0;
+    if (in.up)    held |= LUMA_BTN_UP;
+    if (in.down)  held |= LUMA_BTN_DOWN;
+    if (in.left)  held |= LUMA_BTN_LEFT;
+    if (in.right) held |= LUMA_BTN_RIGHT;
+    if (in.a)     held |= LUMA_BTN_A;
+    if (in.b)     held |= LUMA_BTN_B;
+    if (in.start) held |= LUMA_BTN_START;
+    rt->held_buttons = held;
+
     int speed = 2;
     if (!rt->dialogue_active) {
         // Bug #5 fix: sliding X/Y séparés, test des 4 coins via can_stand_at
@@ -87,10 +100,12 @@ void luma_runtime_update(luma_runtime_t *rt) {
         }
     }
 
+    // V1.5.9 — Tick le runtime events (collisions, hold inputs, timers, dialogue)
+    luma_events_tick(rt, 33); // ~30 FPS = 33ms par frame
+
     if (in.a && !rt->dialogue_active) {
         rt->dialogue_active = true;
-        strncpy(rt->dialogue_text, "LUMA ENGINE 1.0.1", LUMA_MAX_DIALOGUE - 1);
-        // Bug #7 fix: bip non-bloquant (start + audio_update se charge du stop)
+        strncpy(rt->dialogue_text, "LUMA ENGINE 1.5.9", LUMA_MAX_DIALOGUE - 1);
         luma_audio_beep(0, 880, 40);
     } else if (in.b && rt->dialogue_active) {
         rt->dialogue_active = false;

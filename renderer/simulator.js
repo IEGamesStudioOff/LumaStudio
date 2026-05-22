@@ -231,6 +231,8 @@
     if (window.LumaEventSheet) {
       window.LumaEventSheet.resetRuntime();
     }
+    // V1.5.9 — Set des boutons console tenus (pour on_input_hold)
+    sim.heldButtons = new Set();
 
     // Démarre la boucle après le splash
     setTimeout(() => {
@@ -272,6 +274,28 @@
       update();
       // V1.5.7 — Events timer (every_seconds) + camera shake
       if (window.LumaEventSheet) window.LumaEventSheet.tickTimers(sim, dt);
+      // V1.5.9 — Si une action change_scene a été émise, switche la scène ici
+      if (window.LumaEventSheet) {
+        const pending = window.LumaEventSheet.consumePendingSceneSwitch();
+        if (pending && pending.sceneId && typeof scenes !== "undefined") {
+          const sc = scenes.find(s => s.id === pending.sceneId);
+          if (sc) {
+            console.log("[Sim] change_scene →", sc.id);
+            sim.scene = sc;
+            sim.map = maps.find(m => m.id === sc.mapId) || sim.map;
+            if (sc.playerSpawn) {
+              sim.player.x = sc.playerSpawn.x;
+              sim.player.y = sc.playerSpawn.y;
+            }
+            // reset runtime collisions + re-fire on_scene_start
+            window.LumaEventSheet.runtime.activeCollisions.clear();
+            window.LumaEventSheet.runtime.everyTimers.clear();
+            window.LumaEventSheet.runTriggersOfType("on_scene_start", sim);
+          } else {
+            console.warn("[Sim] change_scene : scène introuvable", pending.sceneId);
+          }
+        }
+      }
       if (sim._shake && sim._shake.remaining > 0) {
         sim._shake.remaining -= dt;
         const i = sim._shake.intensity;
@@ -679,9 +703,12 @@
     if (e.key === "Escape") close();
     if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) e.preventDefault();
     // V1.5.7 — Déclenche les events on_input_press (seulement au premier press, pas auto-repeat)
-    if (!wasDown && window.LumaEventSheet) {
-      const btn = keyToButton(e.key);
-      if (btn) {
+    const btn = keyToButton(e.key);
+    if (btn) {
+      // V1.5.9 — maintenir le set des boutons tenus
+      if (!sim.heldButtons) sim.heldButtons = new Set();
+      sim.heldButtons.add(btn);
+      if (!wasDown && window.LumaEventSheet) {
         window.LumaEventSheet.runTriggersOfType("on_input_press", sim, (p) => p.button === btn);
       }
     }
@@ -702,6 +729,8 @@
   function onKeyUp(e) {
     if (!sim.open) return;
     sim.keys[e.key] = false;
+    const btn = keyToButton(e.key);
+    if (btn && sim.heldButtons) sim.heldButtons.delete(btn);
   }
 
   // ---------------------------------------------------------------------------
@@ -760,9 +789,29 @@
     // Pad buttons (touch/click)
     sim.overlay.querySelectorAll(".sim-btn").forEach(b => {
       const k = b.dataset.k;
-      b.addEventListener("pointerdown", (e) => { e.preventDefault(); sim.keys[k] = true; });
-      b.addEventListener("pointerup", () => sim.keys[k] = false);
-      b.addEventListener("pointerleave", () => sim.keys[k] = false);
+      b.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        sim.keys[k] = true;
+        // V1.5.9 — propage au système d'events (input_press + heldButtons)
+        const btn = keyToButton(k);
+        if (btn) {
+          if (!sim.heldButtons) sim.heldButtons = new Set();
+          sim.heldButtons.add(btn);
+          if (window.LumaEventSheet) {
+            window.LumaEventSheet.runTriggersOfType("on_input_press", sim, (p) => p.button === btn);
+          }
+        }
+      });
+      b.addEventListener("pointerup", () => {
+        sim.keys[k] = false;
+        const btn = keyToButton(k);
+        if (btn && sim.heldButtons) sim.heldButtons.delete(btn);
+      });
+      b.addEventListener("pointerleave", () => {
+        sim.keys[k] = false;
+        const btn = keyToButton(k);
+        if (btn && sim.heldButtons) sim.heldButtons.delete(btn);
+      });
     });
 
     window.addEventListener("keydown", onKeyDown);

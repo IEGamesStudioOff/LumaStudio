@@ -707,10 +707,15 @@
   // tourner les events au boot / sur input / etc.
   // ---------------------------------------------------------------------------
   const _runtime = {
-    waitingTimers: new Map(),  // event id → ms restantes
-    everyTimers: new Map(),    // event id → ms accumulés
-    runningWait: new Set(),    // event id qui attend (wait action)
-    variables: {}              // variables globales du jeu
+    waitingTimers: new Map(),     // event id → ms restantes
+    everyTimers: new Map(),       // event id → ms accumulés
+    runningWait: new Set(),       // event id qui attend (wait action)
+    variables: {},                // variables globales du jeu
+    // V1.5.9 — Suivi des collisions actives pour ne fire qu'à l'entrée (pas tant qu'on touche)
+    // Format : Set de strings "idA-idB" (idA<idB pour normalisation)
+    activeCollisions: new Set(),
+    pendingSceneSwitch: null,     // {sceneId} si une action change_scene a été lancée
+    sceneStartFired: false        // garde pour ne pas re-fire on_scene_start après wait
   };
 
   function resetRuntime() {
@@ -718,6 +723,9 @@
     _runtime.everyTimers.clear();
     _runtime.runningWait.clear();
     _runtime.variables = {};
+    _runtime.activeCollisions.clear();
+    _runtime.pendingSceneSwitch = null;
+    _runtime.sceneStartFired = false;
   }
 
   // Évalue un bloc de conditions. Retourne true si toutes passent.
@@ -746,8 +754,8 @@
     return true;
   }
 
-  // Exécute une liste d'actions séquentiellement. Renvoie true si tout est exécuté
-  // immédiatement, false si une "wait" est rencontrée (à reprendre plus tard).
+  // Exécute une liste d'actions séquentiellement. Renvoie {wait, remaining, continuation}
+  // si une "wait" est rencontrée (à reprendre plus tard), {wait:false} sinon.
   function runActions(actions, sim) {
     for (let i = 0; i < actions.length; i++) {
       const a = actions[i];
@@ -758,13 +766,13 @@
         const f = (window.frames || []).find(fr => fr.id === o.spriteFrameId);
         const inst = {
           objectId: o.id,
-          instanceName: `${o.name}_${Date.now()}`,
+          instanceName: `${o.name}_${Date.now()}_${Math.floor(Math.random()*1000)}`,
           x: Number(p.x) || 0, y: Number(p.y) || 0,
           layer: "objects", enabled: true, variables: {},
-          w: f ? f.w : 16, h: f ? f.h : 16
+          w: f ? f.w : 16, h: f ? f.h : 16,
+          hp: o.hp || 0
         };
         sim.scene.objects.push(inst);
-        // précharge le sprite dans le cache simulator
         if (f && f.pixelsB64 && window.LumaSpriteEditor
             && sim.objectSpriteCache && !sim.objectSpriteCache.has(o.spriteFrameId)) {
           try {
@@ -773,26 +781,77 @@
           } catch (e) {}
         }
       } else if (a.type === "destroy_object") {
+        const before = sim.scene.objects.length;
+        const toDestroy = (sim.scene.objects || []).filter(inst => String(inst.objectId) === String(p.object));
         sim.scene.objects = (sim.scene.objects || []).filter(inst => String(inst.objectId) !== String(p.object));
+        // V1.5.9 — Notifier les events on_object_destroyed
+        for (const inst of toDestroy) {
+          runTriggersOfType("on_object_destroyed", sim, (params) => String(params.object) === String(inst.objectId));
+        }
       } else if (a.type === "set_variable") {
+        const old = _runtime.variables[p.variable];
         _runtime.variables[p.variable] = p.value;
+        // V1.5.9 — Notifier on_variable_change si valeur a vraiment changé
+        if (String(old) !== String(p.value)) {
+          runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
+        }
       } else if (a.type === "add_variable") {
-        _runtime.variables[p.variable] = (Number(_runtime.variables[p.variable] || 0)) + Number(p.value);
+        const old = Number(_runtime.variables[p.variable] || 0);
+        const nv = old + Number(p.value);
+        _runtime.variables[p.variable] = nv;
+        if (old !== nv) {
+          runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
+        }
       } else if (a.type === "play_sound") {
         if (sim.audioCtx) playBeep(sim.audioCtx, p.sound);
+      } else if (a.type === "play_music") {
+        // V1.5.9 — Si le music editor a ce morceau, le démarre
+        if (window.LumaMusicEditor && typeof window.LumaMusicEditor.playByName === "function") {
+          window.LumaMusicEditor.playByName(p.name);
+        } else if (sim.audioCtx) {
+          // Fallback : juste un bip ascendant pour signaler
+          playBeep(sim.audioCtx, "level_up");
+        }
+        sim._musicName = p.name;
+      } else if (a.type === "change_scene") {
+        // V1.5.9 — Diffère le switch à la fin du tick (sécurité re-entry)
+        _runtime.pendingSceneSwitch = { sceneId: p.scene };
+        return { wait: false, sceneSwitch: true }; // stop les actions, le sim s'occupera du switch
+      } else if (a.type === "player_move") {
+        // V1.5.9 — Pousse le joueur dans la direction donnée à vitesse définie
+        const sp = Number(p.speed) || 2;
+        if (p.direction === "up")    sim.player.y -= sp;
+        if (p.direction === "down")  sim.player.y += sp;
+        if (p.direction === "left")  sim.player.x -= sp;
+        if (p.direction === "right") sim.player.x += sp;
+      } else if (a.type === "damage_object") {
+        const amount = Number(p.amount) || 1;
+        const toRemove = [];
+        for (const inst of (sim.scene.objects || [])) {
+          if (String(inst.objectId) === String(p.object)) {
+            inst.hp = (inst.hp || 0) - amount;
+            if (inst.hp <= 0) toRemove.push(inst);
+          }
+        }
+        if (toRemove.length) {
+          sim.scene.objects = sim.scene.objects.filter(i => !toRemove.includes(i));
+          for (const inst of toRemove) {
+            runTriggersOfType("on_object_destroyed", sim, (params) => String(params.object) === String(inst.objectId));
+          }
+        }
+      } else if (a.type === "show_dialogue") {
+        sim.dialogue = String(p.text || "");
+        // auto-clear après 3s
+        setTimeout(() => { if (sim.dialogue === p.text) sim.dialogue = null; }, 3000);
       } else if (a.type === "log_debug") {
         console.log("[Event Sheet]", p.text);
       } else if (a.type === "camera_shake") {
         sim._shake = { remaining: Number(p.duration || 0.3) * 1000, intensity: Number(p.intensity || 4) };
       } else if (a.type === "wait") {
-        // Différé : on stocke un timer + continuation pour les actions suivantes
         const remaining = Number(p.seconds || 0.5) * 1000;
         const continuation = actions.slice(i + 1);
         return { wait: true, remaining, continuation };
       }
-      // Les autres actions (change_scene, player_move, damage, show_dialogue,
-      // play_music) sont enregistrées dans le projet mais pas encore exécutées
-      // par le simulator V1.5.7. Elles seront traitées dans une version future.
     }
     return { wait: false };
   }
@@ -842,6 +901,8 @@
 
   function tickTimers(sim, deltaMs) {
     const events = window.events || [];
+
+    // every_seconds (timers cycliques)
     for (const ev of events) {
       if (ev.enabled === false) continue;
       if (!ev.trigger || ev.trigger.type !== "every_seconds") continue;
@@ -860,6 +921,114 @@
       }
       _runtime.everyTimers.set(ev.id, acc);
     }
+
+    // V1.5.9 — on_input_hold : à chaque frame tant que le bouton est down
+    tickHoldTriggers(sim);
+
+    // V1.5.9 — on_collision : détection AABB chaque frame
+    tickCollisions(sim);
+  }
+
+  // V1.5.9 — Pour chaque event on_input_hold dont le bouton est down, fire l'event
+  function tickHoldTriggers(sim) {
+    if (!sim || !sim.heldButtons) return;
+    const events = window.events || [];
+    for (const ev of events) {
+      if (ev.enabled === false) continue;
+      if (!ev.trigger || ev.trigger.type !== "on_input_hold") continue;
+      const btn = ev.trigger.params.button;
+      if (!sim.heldButtons.has(btn)) continue;
+      if (evalConditions(ev.conditions, sim)) {
+        const res = runActions(ev.actions || [], sim);
+        if (res && res.wait) {
+          setTimeout(() => {
+            if (evalConditions(ev.conditions, sim)) runActions(res.continuation, sim);
+          }, res.remaining);
+        }
+      }
+    }
+  }
+
+  // V1.5.9 — Détection des nouvelles collisions entre instances par object_id.
+  // Fire on_collision UNIQUEMENT à l'entrée (pas tant qu'on reste en contact).
+  function tickCollisions(sim) {
+    if (!sim || !sim.scene || !sim.scene.objects) return;
+    const events = window.events || [];
+    const collisionEvents = events.filter(e =>
+      e.enabled !== false && e.trigger && e.trigger.type === "on_collision");
+    if (collisionEvents.length === 0) return;
+
+    const newActive = new Set();
+    const instances = sim.scene.objects;
+
+    // AABB test joueur vs instances (joueur est aussi un "objet" pour on_collision)
+    // On utilise objectId "player" pour matcher params.objectA/objectB = "player"
+    const playerBox = { x: sim.player.x, y: sim.player.y, w: 12, h: 14, objectId: "player" };
+
+    function aabb(a, b) {
+      return a.x < b.x + (b.w || 16) && a.x + (a.w || 16) > b.x
+          && a.y < b.y + (b.h || 16) && a.y + (a.h || 16) > b.y;
+    }
+
+    // Test player vs chaque instance
+    for (const inst of instances) {
+      const box = { x: inst.x, y: inst.y, w: inst.w || 16, h: inst.h || 16, objectId: inst.objectId };
+      if (aabb(playerBox, box)) {
+        const key = "player-" + box.objectId;
+        newActive.add(key);
+        if (!_runtime.activeCollisions.has(key)) {
+          // Nouvelle collision : fire les events qui matchent (player, objectId) ou (objectId, player)
+          for (const ev of collisionEvents) {
+            const a = ev.trigger.params.objectA, b = ev.trigger.params.objectB;
+            if ((String(a) === "player" && String(b) === String(box.objectId))
+             || (String(b) === "player" && String(a) === String(box.objectId))) {
+              if (evalConditions(ev.conditions, sim)) {
+                const res = runActions(ev.actions || [], sim);
+                if (res && res.wait) {
+                  setTimeout(() => {
+                    if (evalConditions(ev.conditions, sim)) runActions(res.continuation, sim);
+                  }, res.remaining);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Test toutes paires d'instances (limité pour perf : skip si > 50 objets)
+    if (instances.length <= 50) {
+      for (let i = 0; i < instances.length; i++) {
+        for (let j = i + 1; j < instances.length; j++) {
+          const a = instances[i], b = instances[j];
+          const ba = { x: a.x, y: a.y, w: a.w || 16, h: a.h || 16 };
+          const bb = { x: b.x, y: b.y, w: b.w || 16, h: b.h || 16 };
+          if (aabb(ba, bb)) {
+            const idA = Math.min(Number(a.objectId), Number(b.objectId));
+            const idB = Math.max(Number(a.objectId), Number(b.objectId));
+            const key = idA + "-" + idB;
+            newActive.add(key);
+            if (!_runtime.activeCollisions.has(key)) {
+              for (const ev of collisionEvents) {
+                const pA = ev.trigger.params.objectA, pB = ev.trigger.params.objectB;
+                const ok = (String(pA) === String(a.objectId) && String(pB) === String(b.objectId))
+                        || (String(pA) === String(b.objectId) && String(pB) === String(a.objectId));
+                if (ok && evalConditions(ev.conditions, sim)) {
+                  const res = runActions(ev.actions || [], sim);
+                  if (res && res.wait) {
+                    setTimeout(() => {
+                      if (evalConditions(ev.conditions, sim)) runActions(res.continuation, sim);
+                    }, res.remaining);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    _runtime.activeCollisions = newActive;
   }
 
   // Expose
@@ -870,6 +1039,12 @@
     runTriggersOfType,
     tickTimers,
     resetRuntime,
+    // V1.5.9 — Sim s'en sert pour switch de scène après un change_scene action
+    consumePendingSceneSwitch: () => {
+      const p = _runtime.pendingSceneSwitch;
+      _runtime.pendingSceneSwitch = null;
+      return p;
+    },
     runtime: _runtime,
     TRIGGERS, CONDITIONS, ACTIONS
   };
