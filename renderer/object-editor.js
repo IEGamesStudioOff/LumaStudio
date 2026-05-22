@@ -111,7 +111,8 @@
       solid: false,
       hp: 0,
       speed: 2,
-      properties: {}
+      properties: {},
+      _justCreated: true  // V1.5.7+ : pour le flash dans la library
     };
     objects.push(o);
     state.selectedId = o.id;
@@ -571,6 +572,7 @@
     refresh: () => { if (panel) refresh(); },
     findFrameById: findFrameById,
     findAnimationById: findAnimationById,
+    selectObject: (id) => { state.selectedId = id; if (panel) refresh(); },
     OBJECT_TYPES: typeof OBJECT_TYPES !== "undefined" ? OBJECT_TYPES : [],
     drawObjectThumb: (cv, o) => drawCardThumb(cv, o)
   };

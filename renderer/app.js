@@ -191,6 +191,9 @@ function setMode(mode) {
   const target = $(`${mode}Workspace`);
   if (target) target.classList.add("active");
   refreshTabs();
+  // V1.5.7+ — Resync la library à chaque switch de mode (objets/sprites/tilesets
+  // ont pu être ajoutés depuis une autre vue)
+  if (typeof populateLibrary === "function") populateLibrary();
   if (mode === "scene" && currentMap && currentScene) {
     renderSceneEditor();
     updateSceneHint();
@@ -545,11 +548,11 @@ mapCanvas.addEventListener("mouseleave", () => { painting = false; });
 mapCanvas.addEventListener("wheel", (e) => {
   if (!currentMap) return;
   e.preventDefault();
-  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
   const oldZoom = sceneZoom;
-  sceneZoom = Math.max(0.25, Math.min(8, sceneZoom * factor));
+  sceneZoom = e.deltaY < 0 ? nextZoomStep(sceneZoom) : prevZoomStep(sceneZoom);
+  if (sceneZoom === oldZoom) return; // déjà au min/max
   applySceneZoom();
-  // Recentre le scroll pour garder le pointeur sur le même tile
+  // Recentre le scroll pour garder le pointeur sur le même tile (zoom-to-cursor)
   const wrap = document.querySelector(".scene-canvas-wrap");
   if (wrap) {
     const rect = mapCanvas.getBoundingClientRect();
@@ -561,21 +564,57 @@ mapCanvas.addEventListener("wheel", (e) => {
   }
 }, { passive: false });
 
+// V1.5.7+ — Zoom pixel-perfect.
+// Au lieu de CSS transform: scale (qui interpole et flou), on redimensionne le
+// canvas en CSS pixels via style.width/height. Combiné à image-rendering:pixelated,
+// ça donne un vrai upscale nearest-neighbor sans aucun anti-aliasing.
+// Paliers entiers : 50% / 100% / 200% / 300% / 400% / 600% / 800%
+const ZOOM_STEPS = [0.5, 1, 2, 3, 4, 6, 8];
+
+function snapToZoomStep(z) {
+  // Retourne le palier le plus proche de z
+  let best = ZOOM_STEPS[0], dist = Math.abs(z - best);
+  for (const s of ZOOM_STEPS) {
+    const d = Math.abs(z - s);
+    if (d < dist) { dist = d; best = s; }
+  }
+  return best;
+}
+
+function nextZoomStep(z) {
+  for (const s of ZOOM_STEPS) if (s > z + 0.001) return s;
+  return ZOOM_STEPS[ZOOM_STEPS.length - 1];
+}
+function prevZoomStep(z) {
+  for (let i = ZOOM_STEPS.length - 1; i >= 0; i--) if (ZOOM_STEPS[i] < z - 0.001) return ZOOM_STEPS[i];
+  return ZOOM_STEPS[0];
+}
+
 function applySceneZoom() {
-  if (mapCanvas) {
-    mapCanvas.style.transform = `scale(${sceneZoom})`;
-    mapCanvas.style.transformOrigin = "0 0";
+  if (!mapCanvas) return;
+  // Snap au palier entier le plus proche pour éviter les zooms fractionnaires flous
+  sceneZoom = snapToZoomStep(sceneZoom);
+  // Reset l'ancien transform CSS s'il restait du V1.5.6
+  mapCanvas.style.transform = "";
+  mapCanvas.style.transition = "";
+  // Vrai upscale via dimensions CSS — l'image-rendering pixelated du canvas
+  // produit alors un rendu pixel-perfect en nearest-neighbor (chaque pixel
+  // logique devient exactement N×N pixels écran selon le zoom).
+  if (currentMap) {
+    const ts = currentMap.tileSize;
+    mapCanvas.style.width  = (currentMap.width  * ts * sceneZoom) + "px";
+    mapCanvas.style.height = (currentMap.height * ts * sceneZoom) + "px";
   }
   if ($("zoomLabel")) $("zoomLabel").textContent = Math.round(sceneZoom * 100) + "%";
 }
 
-// Boutons zoom
+// Boutons zoom (paliers entiers)
 $("zoomIn").addEventListener("click", () => {
-  sceneZoom = Math.min(8, sceneZoom * 1.25);
+  sceneZoom = nextZoomStep(sceneZoom);
   applySceneZoom();
 });
 $("zoomOut").addEventListener("click", () => {
-  sceneZoom = Math.max(0.25, sceneZoom / 1.25);
+  sceneZoom = prevZoomStep(sceneZoom);
   applySceneZoom();
 });
 $("zoomReset").addEventListener("click", () => {
@@ -914,6 +953,9 @@ function renderSceneEditor() {
   mapCanvas.width  = currentMap.width  * ts;
   mapCanvas.height = currentMap.height * ts;
   mapCtx.imageSmoothingEnabled = false;
+  // V1.5.7+ — ré-applique le zoom après reset des dimensions canvas (sinon style.width
+  // reste à la valeur précédente ou se reset implicitement)
+  if (typeof applySceneZoom === "function") applySceneZoom();
 
   mapCtx.fillStyle = $("bgColor").value || "#0a1326";
   mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
@@ -1455,13 +1497,26 @@ function populateLibrary() {
     const btn = document.createElement("button");
     const typeInfo = OBJECT_TYPES.find(t => t.id === o.type);
     const icon = typeInfo ? typeInfo.label.split(" ")[0] : "📦";
-    btn.textContent = `${icon} #${String(o.id).padStart(2,"0")} ${o.name}`;
+    // Affichage simplifié : icône + nom (plus de #ID intrusif)
+    btn.textContent = `${icon} ${o.name}`;
     btn.draggable = true;
-    btn.title = `Drag vers la map pour placer · click pour éditer`;
+    btn.title = `${typeInfo ? typeInfo.label : "Objet"} · ID ${o.id}\nDrag vers la map · click pour éditer`;
     btn.ondragstart = (e) => e.dataTransfer.setData("application/x-luma-object", String(o.id));
-    btn.onclick = () => setMode("objects");
+    btn.onclick = () => {
+      // Sélectionne directement l'objet dans l'editor
+      if (window.LumaObjectEditor && window.LumaObjectEditor.selectObject) {
+        window.LumaObjectEditor.selectObject(o.id);
+      }
+      setMode("objects");
+    };
+    // V1.5.7+ — flash si c'est le dernier objet créé (id le plus haut)
+    const maxId = objects.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
+    if (Number(o.id) === maxId && o._justCreated) {
+      btn.classList.add("lib-just-added");
+      delete o._justCreated;
+    }
     return btn;
-  }, "Aucun objet. Crée-en un dans Objects/Events.", (o) => deleteObjectFromLib(o));
+  }, "Aucun objet. Crée-en un dans Objects.", (o) => deleteObjectFromLib(o));
 
   // V1.5.3 — Tilesets dans la library
   populateLibSection("libTilesets", "libTilesetsCount", tilesets, (ts) => {
