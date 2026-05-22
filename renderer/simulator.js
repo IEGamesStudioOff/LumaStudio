@@ -226,10 +226,21 @@
     centerCamera();
     drawBootSplash();
 
+    // V1.5.7 — Expose sim globalement pour event-sheet runtime
+    window._lumaSim = sim;
+    if (window.LumaEventSheet) {
+      window.LumaEventSheet.resetRuntime();
+    }
+
     // Démarre la boucle après le splash
     setTimeout(() => {
       sim.lastTick = performance.now();
       sim.fpsLast = sim.lastTick;
+      // V1.5.7 — Déclenche les events on_scene_start
+      if (window.LumaEventSheet) {
+        const fired = window.LumaEventSheet.runTriggersOfType("on_scene_start", sim);
+        if (fired.length) console.log("[Sim] on_scene_start →", fired);
+      }
       sim.rafId = requestAnimationFrame(loop);
     }, 800);
   }
@@ -256,8 +267,20 @@
   function loop(t) {
     if (!sim.open) return;
     if (t - sim.lastTick >= TICK_MS) {
+      const dt = t - sim.lastTick;
       sim.lastTick = t;
       update();
+      // V1.5.7 — Events timer (every_seconds) + camera shake
+      if (window.LumaEventSheet) window.LumaEventSheet.tickTimers(sim, dt);
+      if (sim._shake && sim._shake.remaining > 0) {
+        sim._shake.remaining -= dt;
+        const i = sim._shake.intensity;
+        sim._shakeOffset = {
+          x: (Math.random() - 0.5) * 2 * i,
+          y: (Math.random() - 0.5) * 2 * i
+        };
+        if (sim._shake.remaining <= 0) { sim._shake = null; sim._shakeOffset = null; }
+      }
       render();
       flush();
 
@@ -651,9 +674,29 @@
   // ---------------------------------------------------------------------------
   function onKeyDown(e) {
     if (!sim.open) return;
+    const wasDown = sim.keys[e.key];
     sim.keys[e.key] = true;
     if (e.key === "Escape") close();
     if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) e.preventDefault();
+    // V1.5.7 — Déclenche les events on_input_press (seulement au premier press, pas auto-repeat)
+    if (!wasDown && window.LumaEventSheet) {
+      const btn = keyToButton(e.key);
+      if (btn) {
+        window.LumaEventSheet.runTriggersOfType("on_input_press", sim, (p) => p.button === btn);
+      }
+    }
+  }
+
+  // Mapping clavier → bouton console Luma
+  function keyToButton(key) {
+    if (key === "ArrowUp")    return "UP";
+    if (key === "ArrowDown")  return "DOWN";
+    if (key === "ArrowLeft")  return "LEFT";
+    if (key === "ArrowRight") return "RIGHT";
+    if (key === "z" || key === "Z" || key === "w") return "A";
+    if (key === "x" || key === "X") return "B";
+    if (key === "Enter") return "START";
+    return null;
   }
 
   function onKeyUp(e) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Luma Studio v1.5.6</title>
+  <title>Luma Studio v1.5.7</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
       <div class="splash-card">
         <img src="../assets/logo.png" alt="Luma Studio" />
         <h1>LUMA STUDIO</h1>
-        <p>v 1.5.6</p>
+        <p>v 1.5.7</p>
       </div>
     </section>
 
@@ -25,7 +25,7 @@
         <div class="dialog-title">
           <img src="../assets/logo.png" alt="">
           <strong>LUMA STUDIO</strong>
-          <span>v 1.5.6</span>
+          <span>v 1.5.7</span>
         </div>
         <div class="dialog-body">
           <div class="form-block">
@@ -60,7 +60,7 @@
       <header class="topbar">
         <div class="brand">
           <img src="../assets/logo.png" alt="Luma">
-          <strong>v 1.5.6</strong>
+          <strong>v 1.5.7</strong>
         </div>
         <div class="toolbar">
           <button id="resetMap" class="btn tiny">reset map</button>
@@ -139,7 +139,8 @@
           <button class="left-section" data-mode="sprite">Sprite Editor</button>
           <button class="left-section" data-mode="tileset">Tileset Editor</button>
           <button class="left-section" data-mode="music">Music Editor</button>
-          <button class="left-section" data-mode="objects">Objects / Events</button>
+          <button class="left-section" data-mode="objects">Objects</button>
+          <button class="left-section" data-mode="events">Events</button>
           <button class="left-section" data-mode="build">Build / Export</button>
 
           <div class="project-path" id="projectPath">Aucun projet</div>
@@ -274,6 +275,11 @@
             <section id="logicPanel" class="panel-injected"></section>
           </section>
 
+          <!-- EVENTS WORKSPACE : V1.5.7 event sheet no-code -->
+          <section id="eventsWorkspace" class="workspace">
+            <section id="eventSheetPanel" class="panel-injected"></section>
+          </section>
+
           <!-- BUILD WORKSPACE -->
           <section id="buildWorkspace" class="workspace placeholder">
             <h2>🚀 Build / Export</h2>
@@ -323,7 +329,7 @@
       <!-- BOTTOMBAR -->
       <footer class="bottombar">
         <span id="hint">💡 Glisse un sprite ou un objet de la bibliothèque vers la map. Tous les placements d'un même ID = même objet.</span>
-        <span id="footRight">Luma Studio v1.5.6</span>
+        <span id="footRight">Luma Studio v1.5.7</span>
       </footer>
     </section>
   </main>
@@ -332,6 +338,7 @@
   <script src="sprite-editor.js"></script>
   <script src="music-editor.js"></script>
   <script src="object-editor.js"></script>
+  <script src="event-sheet.js"></script>
   <script src="simulator.js"></script>
 </body>
 </html>

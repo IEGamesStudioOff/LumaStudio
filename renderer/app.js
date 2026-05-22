@@ -199,6 +199,7 @@ function setMode(mode) {
   if (mode === "tileset") drawTilesetWorkspace();
   if (mode === "music"  && window.LumaMusicEditor)  window.LumaMusicEditor.init();
   if (mode === "objects" && window.LumaObjectEditor) window.LumaObjectEditor.init();
+  if (mode === "events" && window.LumaEventSheet) window.LumaEventSheet.init();
 }
 
 // V1.5.5 — Hint contextuel selon layer actif + outil
@@ -219,7 +220,8 @@ function refreshTabs() {
   tabs.innerHTML = "";
   const labels = {
     scene: "🗺 Scène", sprite: "🎨 Asset Lab", tileset: "🧱 Tileset Editor",
-    music: "🎵 Piano Roll", objects: "📦 Objects / Events", build: "🚀 Build"
+    music: "🎵 Piano Roll", objects: "📦 Objects",
+    events: "⚡ Event Sheet", build: "🚀 Build"
   };
   const lab = labels[currentMode] || currentMode;
   const t = document.createElement("button");
@@ -1493,9 +1495,22 @@ function populateLibrary() {
 
   populateLibSection("libEvents", "libEventsCount", events, (e) => {
     const btn = document.createElement("button");
-    btn.textContent = `⚡ ${e.name || "event"}`;
+    const valid = window.LumaEventSheet ? window.LumaEventSheet.validateEvent(e) : { ok: true };
+    btn.textContent = `${valid.ok ? "✓" : "⚠"} #${e.id} ${e.name || "event"}`;
+    btn.title = "Click pour éditer";
+    btn.onclick = () => {
+      setMode("events");
+      // Sélectionne l'event au prochain refresh
+      setTimeout(() => {
+        if (window.LumaEventSheet) {
+          // Hack léger : on passe par le state interne via DOM
+          const card = document.querySelector(`#esList .es-card:nth-child(${events.indexOf(e) + 1})`);
+          if (card) card.click();
+        }
+      }, 60);
+    };
     return btn;
-  }, "Aucun event.");
+  }, "Aucun event. Va dans Events.");
 }
 
 function populateLibSection(divId, countId, items, makeBtn, emptyText, deleteFn) {
@@ -1662,6 +1677,13 @@ function formatBytes(bytes) {
 // V1.5.6 — Expose pour que les modules (music-editor, sprite-editor) puissent l'appeler
 window.updateCapacityBar = updateCapacityBar;
 window.populateLibrary = function() { return populateLibrary(); };
+
+// V1.5.7 — Expose state pour event-sheet
+Object.defineProperty(window, "events", { get: () => events, configurable: true });
+Object.defineProperty(window, "objects", { get: () => objects, configurable: true });
+Object.defineProperty(window, "scenes", { get: () => scenes, configurable: true });
+Object.defineProperty(window, "frames", { get: () => frames, configurable: true });
+window.setEvents = function(arr) { events = arr; };
 
 // ---------------------------------------------------------------------------
 // COMPAT V1.4 modules
