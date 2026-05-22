@@ -142,6 +142,63 @@
 
   function $$(id) { return document.getElementById(id); }
 
+  function cloneData(data) {
+    try {
+      if (typeof structuredClone === "function") return structuredClone(data);
+    } catch (e) {}
+    try {
+      return JSON.parse(JSON.stringify(data));
+    } catch (e) {
+      return data;
+    }
+  }
+
+  function ensureSceneSnapshots() {
+    if (!sim._sceneSnapshots) sim._sceneSnapshots = new Map();
+    if (typeof scenes === "undefined") return;
+    for (const sc of scenes) {
+      if (!sc || sc.id == null || sim._sceneSnapshots.has(sc.id)) continue;
+      sim._sceneSnapshots.set(sc.id, {
+        objects: cloneData(sc.objects || []),
+        playerSpawn: cloneData(sc.playerSpawn || null),
+        mapId: sc.mapId
+      });
+    }
+  }
+
+  function restoreSceneInitialState(sc) {
+    if (!sc) return;
+    ensureSceneSnapshots();
+    const snap = sim._sceneSnapshots && sim._sceneSnapshots.get(sc.id);
+    if (!snap) return;
+    sc.objects = cloneData(snap.objects || []);
+    sc.playerSpawn = cloneData(snap.playerSpawn || null);
+    sc.mapId = snap.mapId;
+  }
+
+  function resetPlayerForScene(sc) {
+    if (!sim.player) return;
+    sim.player.dead = false;
+    sim.player.visible = true;
+    sim.player.vx = 0;
+    sim.player.vy = 0;
+    sim.player.subX = 0;
+    sim.player.subY = 0;
+    sim.player.grounded = false;
+    sim.player.jumpPrev = false;
+    if (sim._doorSpawn) {
+      sim.player.x = sim._doorSpawn.x;
+      sim.player.y = sim._doorSpawn.y;
+      sim._doorSpawn = null;
+    } else if (sc && sc.playerSpawn) {
+      sim.player.x = sc.playerSpawn.x;
+      sim.player.y = sc.playerSpawn.y;
+    } else {
+      sim.player.x = 32;
+      sim.player.y = 32;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // BOOT
   // ---------------------------------------------------------------------------
@@ -150,6 +207,9 @@
     sim.open = true;
     sim.overlay.classList.add("active");
     document.body.style.overflow = "hidden";
+
+    // Snapshot de départ pour pouvoir redémarrer une scène proprement.
+    ensureSceneSnapshots();
 
     // Charge la première scène/map du projet
     if (typeof scenes !== "undefined" && scenes.length > 0) {
@@ -290,27 +350,27 @@
       // V1.5.9 — Si une action change_scene a été émise, switche la scène ici
       if (window.LumaEventSheet) {
         const pending = window.LumaEventSheet.consumePendingSceneSwitch();
-        if (pending && pending.sceneId && typeof scenes !== "undefined") {
-          const sc = scenes.find(s => s.id === pending.sceneId);
+        if (pending && pending.sceneId != null && typeof scenes !== "undefined") {
+          const sc = scenes.find(s => String(s.id) === String(pending.sceneId));
           if (sc) {
-            console.log("[Sim] change_scene →", sc.id);
-            sim.scene = sc;
-            sim.map = maps.find(m => m.id === sc.mapId) || sim.map;
-            // V1.6.0 — Si un Door behavior a défini un spawn custom, l'utilise
-            if (sim._doorSpawn) {
-              sim.player.x = sim._doorSpawn.x;
-              sim.player.y = sim._doorSpawn.y;
-              sim._doorSpawn = null;
-            } else if (sc.playerSpawn) {
-              sim.player.x = sc.playerSpawn.x;
-              sim.player.y = sc.playerSpawn.y;
+            if (pending.restart) {
+              console.log("[Sim] restart_scene →", sc.id);
+              restoreSceneInitialState(sc);
+            } else {
+              console.log("[Sim] change_scene →", sc.id);
             }
+            sim.scene = sc;
+            sim.map = (typeof maps !== "undefined") ? (maps.find(m => m.id === sc.mapId) || sim.map) : sim.map;
+            resetPlayerForScene(sc);
+            sim.dialogue = null;
+            sim._shake = null;
+            sim._shakeOffset = null;
             // reset runtime collisions + re-fire on_scene_start
             window.LumaEventSheet.runtime.activeCollisions.clear();
             window.LumaEventSheet.runtime.everyTimers.clear();
             window.LumaEventSheet.runTriggersOfType("on_scene_start", sim);
           } else {
-            console.warn("[Sim] change_scene : scène introuvable", pending.sceneId);
+            console.warn("[Sim] change_scene/restart_scene : scène introuvable", pending.sceneId);
           }
         }
       }
