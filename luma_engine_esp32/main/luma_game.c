@@ -241,6 +241,54 @@ bool luma_game_load_first_scene(luma_runtime_t *rt) {
     } else {
         luma_events_init(rt, NULL);
     }
+
+    // V1.6.1 — Parse playerConfig top-level pour configurer le behavior du joueur.
+    // Si absent, fallback sur TopDown legacy (V1.5.x : déplacement direct par input).
+    rt->player_behavior = LUMA_PLAYER_BEH_LEGACY;
+    rt->pl_gravity_x100 = 40;
+    rt->pl_jump_force_x10 = 55;
+    rt->pl_max_speed_x_x10 = 20;
+    rt->pl_max_fall_x10 = 60;
+    rt->pl_diagonal = false;
+    rt->player.vx = 0;
+    rt->player.vy = 0;
+    rt->player.sub_x = 0;
+    rt->player.sub_y = 0;
+    rt->player.grounded = false;
+    rt->player.jump_prev = false;
+    rt->player.w = 12;
+    rt->player.h = 14;
+
+    cJSON *pc = cJSON_GetObjectItem(s_game_json, "playerConfig");
+    if (pc && cJSON_IsObject(pc)) {
+        const cJSON *beh = cJSON_GetObjectItem(pc, "behavior");
+        if (cJSON_IsString(beh)) {
+            if (strcmp(beh->valuestring, "PlatformerMovement") == 0) {
+                rt->player_behavior = LUMA_PLAYER_BEH_PLATFORMER;
+            } else if (strcmp(beh->valuestring, "TopDownMovement") == 0) {
+                rt->player_behavior = LUMA_PLAYER_BEH_TOPDOWN;
+            }
+        }
+        const cJSON *props = cJSON_GetObjectItem(pc, "properties");
+        if (props && cJSON_IsObject(props)) {
+            const cJSON *g = cJSON_GetObjectItem(props, "gravity");
+            const cJSON *jf = cJSON_GetObjectItem(props, "jumpForce");
+            const cJSON *msx = cJSON_GetObjectItem(props, "maxSpeedX");
+            const cJSON *mfl = cJSON_GetObjectItem(props, "maxFallSpeed");
+            const cJSON *sp = cJSON_GetObjectItem(props, "speed");
+            const cJSON *dg = cJSON_GetObjectItem(props, "diagonal");
+            if (cJSON_IsNumber(g))   rt->pl_gravity_x100 = (int16_t)(g->valuedouble * 100);
+            if (cJSON_IsNumber(jf))  rt->pl_jump_force_x10 = (int16_t)(jf->valuedouble * 10);
+            if (cJSON_IsNumber(msx)) rt->pl_max_speed_x_x10 = (int16_t)(msx->valuedouble * 10);
+            if (cJSON_IsNumber(mfl)) rt->pl_max_fall_x10 = (int16_t)(mfl->valuedouble * 10);
+            if (cJSON_IsNumber(sp))  rt->pl_max_speed_x_x10 = (int16_t)(sp->valuedouble * 10);
+            if (cJSON_IsBool(dg))    rt->pl_diagonal = cJSON_IsTrue(dg);
+        }
+        ESP_LOGI(TAG, "PlayerConfig: behavior=%d gravity=%d jump=%d speed=%d fall=%d",
+                 rt->player_behavior, rt->pl_gravity_x100, rt->pl_jump_force_x10,
+                 rt->pl_max_speed_x_x10, rt->pl_max_fall_x10);
+    }
+
     return true;
 }
 

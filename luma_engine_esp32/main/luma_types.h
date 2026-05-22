@@ -98,10 +98,17 @@ typedef struct {
 typedef struct {
     int16_t x;
     int16_t y;
-    int16_t vx;
-    int16_t vy;
+    int16_t vx;     // vélocité X ×100 (sub-pixel)
+    int16_t vy;     // vélocité Y ×100 (sub-pixel)
     uint8_t hp;
     uint8_t facing;
+    // V1.6.1 — État platformer
+    int16_t sub_x;        // sub-pixel accumulator X ×100
+    int16_t sub_y;        // sub-pixel accumulator Y ×100
+    bool grounded;
+    bool jump_prev;
+    uint8_t w;            // hitbox
+    uint8_t h;
 } luma_player_t;
 
 // V1.2 : taille max d'un sprite joueur/objet en RAM
@@ -156,4 +163,15 @@ typedef struct {
     // V1.5.9 — dialogue_remaining_ms drives l'auto-clear de dialogue_text (déjà existant
     // dans la struct au-dessus). On laisse dialogue_active inchangé pour compat.
     uint32_t dialogue_remaining_ms;
+    // V1.6.1 — Config du joueur (résolue depuis playerConfig du game.luma au boot scène)
+    uint8_t player_behavior;          // 0=TopDown legacy, 1=TopDownMovement, 2=PlatformerMovement
+    int16_t pl_gravity_x100;          // gravité ×100 (0.40 → 40)
+    int16_t pl_jump_force_x10;        // force saut ×10 (5.5 → 55)
+    int16_t pl_max_speed_x_x10;       // vitesse horiz max ×10
+    int16_t pl_max_fall_x10;          // vitesse chute max ×10
+    bool pl_diagonal;                 // TopDown : diagonal autorisé
 } luma_runtime_t;
+
+#define LUMA_PLAYER_BEH_LEGACY     0
+#define LUMA_PLAYER_BEH_TOPDOWN    1
+#define LUMA_PLAYER_BEH_PLATFORMER 2

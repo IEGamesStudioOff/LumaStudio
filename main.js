@@ -731,6 +731,15 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
     }
   }
 
+  // V1.6.1 — Top-level playerConfig pour que le moteur ESP32 puisse configurer
+  // le joueur (behavior + params platformer) sans avoir à scanner tous les objects.
+  const playerObj = objects.find(o => o.type === "PLAYER");
+  const playerConfig = playerObj ? {
+    behavior: playerObj.behavior || "None",
+    spriteFrameId: playerObj.spriteFrameId,
+    properties: playerObj.properties || {}
+  } : null;
+
   // V1.5.4 — N'inclut PAS tilesets[].dataUrl dans game.luma (image massive
   // déjà dans le LPK). On envoie juste un index léger.
   const tilesetsLite = tilesets.map(t => ({
@@ -752,7 +761,8 @@ function makeGameLuma(projectDir, outputPath, secureKey = null) {
     triggers,
     maps,
     scenes,
-    tilesets: tilesetsLite
+    tilesets: tilesetsLite,
+    playerConfig
   };
 
   let data = Buffer.from(JSON.stringify(gameData, null, 2), "utf8");

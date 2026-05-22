@@ -95,12 +95,11 @@
     const speed = prop(playerDef, "speed", 2.0);
     const diag = prop(playerDef, "diagonal", false);
     let dx = 0, dy = 0;
-    if (sim.keys.ArrowLeft || sim.keys.a || sim.keys.q) dx -= speed;
+    if (sim.keys.ArrowLeft || sim.keys.q) dx -= speed;
     if (sim.keys.ArrowRight || sim.keys.d) dx += speed;
-    if (sim.keys.ArrowUp || sim.keys.w || sim.keys.z) dy -= speed;
+    if (sim.keys.ArrowUp) dy -= speed;
     if (sim.keys.ArrowDown || sim.keys.s) dy += speed;
     if (!diag && dx !== 0 && dy !== 0) {
-      // Empêche le mouvement diagonal — privilégie X si bouton X pressé en premier
       if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
     }
     if (dx !== 0) moveX(sim, sim.player, dx, sim.player.w, sim.player.h);
@@ -108,41 +107,101 @@
   }
 
   function updatePlatformer(sim, playerDef) {
+    // V1.6.1 — Init complète + sub-pixel accumulator
     if (sim.player.vx === undefined) sim.player.vx = 0;
     if (sim.player.vy === undefined) sim.player.vy = 0;
+    if (sim.player.subX === undefined) sim.player.subX = 0;
+    if (sim.player.subY === undefined) sim.player.subY = 0;
     if (sim.player.grounded === undefined) sim.player.grounded = false;
+    if (sim.player.jumpPrev === undefined) sim.player.jumpPrev = false;
 
-    const gravity = prop(playerDef, "gravity", 0.4);
-    const jumpForce = prop(playerDef, "jumpForce", 5.5);
-    const maxSpeedX = prop(playerDef, "maxSpeedX", 2.0);
-    const maxFall = prop(playerDef, "maxFallSpeed", 6.0);
+    const gravity = Number(prop(playerDef, "gravity", 0.4));
+    const jumpForce = Number(prop(playerDef, "jumpForce", 5.5));
+    const maxSpeedX = Number(prop(playerDef, "maxSpeedX", 2.0));
+    const maxFall = Number(prop(playerDef, "maxFallSpeed", 6.0));
 
-    // Inputs horizontaux
-    let dx = 0;
-    if (sim.keys.ArrowLeft || sim.keys.a || sim.keys.q) dx = -maxSpeedX;
-    if (sim.keys.ArrowRight || sim.keys.d) dx = maxSpeedX;
-    sim.player.vx = dx;
+    // ── Inputs horizontaux : flèches G/D explicites (pas de Z/W qui = saut)
+    let inputX = 0;
+    if (sim.keys.ArrowLeft  || sim.keys.q) inputX = -1;
+    if (sim.keys.ArrowRight || sim.keys.d) inputX = 1;
+    sim.player.vx = inputX * maxSpeedX;
 
-    // Saut (A bouton ou Z)
-    const jumpHeld = sim.keys.z || sim.keys.Z || sim.keys.w;
-    if (jumpHeld && sim.player.grounded) {
+    // ── Saut : EDGE-DETECT (transition 0→1 du bouton), pas hold.
+    // Plus de vol infini quand on tient Z. Le saut ne peut être déclenché que
+    // si le joueur est au sol ET qu'on vient juste d'appuyer sur le bouton saut.
+    const jumpDown = !!(sim.keys.z || sim.keys.Z || sim.keys.w || sim.keys.ArrowUp);
+    const jumpJustPressed = jumpDown && !sim.player.jumpPrev;
+    if (jumpJustPressed && sim.player.grounded) {
       sim.player.vy = -jumpForce;
       sim.player.grounded = false;
     }
+    sim.player.jumpPrev = jumpDown;
 
-    // Gravité
+    // ── Variable jump height : si tu relâches le bouton en l'air, vy est coupé
+    // (saut plus court). Méthode standard des jeux platformer.
+    if (!jumpDown && sim.player.vy < -1) {
+      sim.player.vy *= 0.5;
+    }
+
+    // ── Gravité
     sim.player.vy += gravity;
     if (sim.player.vy > maxFall) sim.player.vy = maxFall;
 
-    // Move X
-    moveX(sim, sim.player, sim.player.vx, sim.player.w, sim.player.h);
-    // Move Y avec détection sol
-    const moved = moveY(sim, sim.player, sim.player.vy, sim.player.w, sim.player.h);
-    if (!moved) {
-      if (sim.player.vy > 0) sim.player.grounded = true;
-      sim.player.vy = 0;
-    } else {
-      sim.player.grounded = false;
+    // ── Sub-pixel accumulator : permet gravity=0.4 de produire un vrai mouvement
+    // au lieu d'être arrondi à 0 chaque frame. On accumule la fraction, on
+    // déplace l'entier, on garde le reste pour la frame suivante.
+    sim.player.subX += sim.player.vx;
+    sim.player.subY += sim.player.vy;
+    const stepX = Math.trunc(sim.player.subX);
+    const stepY = Math.trunc(sim.player.subY);
+    sim.player.subX -= stepX;
+    sim.player.subY -= stepY;
+
+    // ── Mouvement X (sliding contre les murs)
+    if (stepX !== 0) {
+      const dir = stepX > 0 ? 1 : -1;
+      let remaining = Math.abs(stepX);
+      while (remaining > 0) {
+        if (!moveX(sim, sim.player, dir, sim.player.w, sim.player.h)) {
+          sim.player.vx = 0;
+          sim.player.subX = 0;
+          break;
+        }
+        remaining--;
+      }
+    }
+
+    // ── Mouvement Y (détection sol/plafond pixel par pixel pour fiabilité)
+    if (stepY !== 0) {
+      const dir = stepY > 0 ? 1 : -1;
+      let remaining = Math.abs(stepY);
+      let blocked = false;
+      while (remaining > 0) {
+        if (!moveY(sim, sim.player, dir, sim.player.w, sim.player.h)) {
+          blocked = true;
+          break;
+        }
+        remaining--;
+      }
+      if (blocked) {
+        if (sim.player.vy > 0) {
+          // On descendait et on a touché un sol → grounded
+          sim.player.grounded = true;
+        } else {
+          // On montait et on a touché un plafond → arrête le saut
+        }
+        sim.player.vy = 0;
+        sim.player.subY = 0;
+      } else {
+        // Pas bloqué = en l'air (sauf si on a bougé que à cause de l'accumulator)
+        if (sim.player.vy > gravity * 2) sim.player.grounded = false;
+      }
+    } else if (sim.player.vy > 0) {
+      // Vitesse positive mais step=0 (accumulator pas plein) → test si toujours au sol
+      // en regardant si on peut descendre d'1px : si non, on est grounded.
+      const canFall = !isBlocked(sim, sim.player.x, sim.player.y + sim.player.h)
+                   && !isBlocked(sim, sim.player.x + sim.player.w - 1, sim.player.y + sim.player.h);
+      sim.player.grounded = !canFall;
     }
   }
 

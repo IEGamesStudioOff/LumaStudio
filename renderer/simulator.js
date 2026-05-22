@@ -165,6 +165,16 @@
     } else {
       sim.player.x = 32; sim.player.y = 32;
     }
+    // V1.6.1 — Init complète player (hitbox + état platformer)
+    sim.player.w = 12;
+    sim.player.h = 14;
+    sim.player.size = 12; // compat legacy
+    sim.player.vx = 0;
+    sim.player.vy = 0;
+    sim.player.subX = 0;
+    sim.player.subY = 0;
+    sim.player.grounded = false;
+    sim.player.jumpPrev = false;
     // Trouve le 1er sprite avec pixelsB64
     sim.sprite = null;
     if (typeof frames !== "undefined") {
@@ -173,6 +183,9 @@
           try {
             const px = window.LumaSpriteEditor.base64ToPixels(f.pixelsB64, f.w * f.h);
             sim.sprite = { w: f.w, h: f.h, pixels: px };
+            // V1.6.1 — Adapte hitbox au sprite (avec marge pour passer dans 1 tile)
+            sim.player.w = Math.min(f.w, 14);
+            sim.player.h = Math.min(f.h, 14);
             sim.player.size = Math.min(f.w, f.h);
             break;
           } catch (e) {}
