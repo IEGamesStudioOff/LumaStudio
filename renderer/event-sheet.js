@@ -154,8 +154,8 @@
       advLabel: "create",
       params: [
         { key: "object", label: "Objet", type: "object_ref" },
-        { key: "x", label: "X (px)", type: "number", default: 80 },
-        { key: "y", label: "Y (px)", type: "number", default: 64 }
+        { key: "x", label: "X (px ou expression)", type: "string", default: "80" },
+        { key: "y", label: "Y (px ou expression)", type: "string", default: "64" }
       ]
     },
     {
@@ -383,7 +383,7 @@
           continue;
         }
         if (p.type === "object_ref") {
-          if (!objects.find(o => String(o.id) === String(v))) {
+          if (String(v).toLowerCase() !== "player" && !objects.find(o => String(o.id) === String(v) || String(o.name) === String(v))) {
             warnings.push(`${kind} "${spec.label}" : objet #${v} introuvable`);
           }
         } else if (p.type === "scene_ref") {
@@ -647,6 +647,11 @@
       const empty = document.createElement("option");
       empty.value = ""; empty.textContent = "— Choisir —";
       sel.appendChild(empty);
+      const playerOpt = document.createElement("option");
+      playerOpt.value = "player";
+      playerOpt.textContent = "⭐ Player / Joueur du simulateur";
+      if (String(value).toLowerCase() === "player") playerOpt.selected = true;
+      sel.appendChild(playerOpt);
       for (const o of (window.objects || [])) {
         const opt = document.createElement("option");
         opt.value = String(o.id);
@@ -728,129 +733,202 @@
     _runtime.sceneStartFired = false;
   }
 
+  // V1.6.2 — Helpers robustes pour éviter que les events cassent silencieusement.
+  // Le Player est un objet spécial du simulateur, même s'il n'existe pas dans scene.objects.
+  function ensureSceneObjects(sim) {
+    if (!sim || !sim.scene) return [];
+    if (!Array.isArray(sim.scene.objects)) sim.scene.objects = [];
+    return sim.scene.objects;
+  }
+
+  function objectMatches(ref, inst) {
+    if (ref == null || ref === "") return false;
+    const r = String(ref);
+    if (!inst) return false;
+    return String(inst.objectId) === r || String(inst.instanceName || "") === r;
+  }
+
+  function findObjectDef(ref) {
+    const r = String(ref);
+    return (window.objects || []).find(o => String(o.id) === r || String(o.name) === r) || null;
+  }
+
+  function resolveValue(v, sim, fallback = 0) {
+    if (v == null || v === "") return fallback;
+    if (typeof v === "number") return v;
+    const raw = String(v).trim();
+    const low = raw.toLowerCase();
+    if (low === "player.x") return sim && sim.player ? Number(sim.player.x || 0) : fallback;
+    if (low === "player.y") return sim && sim.player ? Number(sim.player.y || 0) : fallback;
+    if (low === "player.cx" || low === "player.centerx") return sim && sim.player ? Number(sim.player.x || 0) + Number(sim.player.w || sim.player.size || 12) / 2 : fallback;
+    if (low === "player.cy" || low === "player.centery") return sim && sim.player ? Number(sim.player.y || 0) + Number(sim.player.h || sim.player.size || 12) / 2 : fallback;
+    if (low === "screen.centerx" || low === "centerx") return 80;
+    if (low === "screen.centery" || low === "centery") return 64;
+    if (_runtime.variables.hasOwnProperty(raw)) return Number(_runtime.variables[raw]);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function resolveObjectRef(ref, sim) {
+    const r = String(ref || "").toLowerCase();
+    if (r === "player" || r === "joueur") return { kind: "player", target: sim ? sim.player : null };
+    return { kind: "instances", target: ensureSceneObjects(sim).filter(inst => objectMatches(ref, inst)) };
+  }
+
   // Évalue un bloc de conditions. Retourne true si toutes passent.
   function evalConditions(conds, sim) {
     if (!conds || conds.length === 0) return true;
-    for (const c of conds) {
-      const p = c.params || {};
-      if (c.type === "variable_eq") {
-        if (String(_runtime.variables[p.variable]) !== String(p.value)) return false;
-      } else if (c.type === "variable_gt") {
-        if (!(Number(_runtime.variables[p.variable] || 0) > Number(p.value))) return false;
-      } else if (c.type === "variable_lt") {
-        if (!(Number(_runtime.variables[p.variable] || 0) < Number(p.value))) return false;
-      } else if (c.type === "object_exists") {
-        const exists = (sim.scene.objects || []).some(o => String(o.objectId) === String(p.object));
-        if (!exists) return false;
-      } else if (c.type === "random_chance") {
-        if (Math.random() * 100 > Number(p.percent || 50)) return false;
-      } else if (c.type === "object_has_tag") {
-        const inst = (sim.scene.objects || []).find(o => String(o.objectId) === String(p.object));
-        if (!inst) return false;
-        const objDef = (window.objects || []).find(o => o.id === inst.objectId);
-        if (!objDef || !(objDef.tags || []).includes(p.tag)) return false;
+    try {
+      for (const c of conds) {
+        const p = c.params || {};
+        if (c.type === "variable_eq") {
+          if (String(_runtime.variables[p.variable]) !== String(p.value)) return false;
+        } else if (c.type === "variable_gt") {
+          if (!(Number(_runtime.variables[p.variable] || 0) > Number(p.value))) return false;
+        } else if (c.type === "variable_lt") {
+          if (!(Number(_runtime.variables[p.variable] || 0) < Number(p.value))) return false;
+        } else if (c.type === "object_exists") {
+          const ref = resolveObjectRef(p.object, sim);
+          const exists = ref.kind === "player" ? !!ref.target : ref.target.length > 0;
+          if (!exists) return false;
+        } else if (c.type === "random_chance") {
+          if (Math.random() * 100 > Number(p.percent || 50)) return false;
+        } else if (c.type === "object_has_tag") {
+          const ref = resolveObjectRef(p.object, sim);
+          if (ref.kind === "player") {
+            if (p.tag !== "player") return false;
+          } else {
+            const inst = ref.target[0];
+            if (!inst) return false;
+            const objDef = findObjectDef(inst.objectId);
+            if (!objDef || !(objDef.tags || []).includes(p.tag)) return false;
+          }
+        }
       }
+      return true;
+    } catch (err) {
+      console.warn("[Event Sheet] Condition ignorée à cause d'une erreur :", err);
+      return false;
     }
-    return true;
   }
 
   // Exécute une liste d'actions séquentiellement. Renvoie {wait, remaining, continuation}
   // si une "wait" est rencontrée (à reprendre plus tard), {wait:false} sinon.
   function runActions(actions, sim) {
+    if (!sim) return { wait: false };
+    ensureSceneObjects(sim);
+
     for (let i = 0; i < actions.length; i++) {
       const a = actions[i];
       const p = a.params || {};
-      if (a.type === "create_object") {
-        const o = (window.objects || []).find(o => String(o.id) === String(p.object));
-        if (!o || !sim.scene) continue;
-        const f = (window.frames || []).find(fr => fr.id === o.spriteFrameId);
-        const inst = {
-          objectId: o.id,
-          instanceName: `${o.name}_${Date.now()}_${Math.floor(Math.random()*1000)}`,
-          x: Number(p.x) || 0, y: Number(p.y) || 0,
-          layer: "objects", enabled: true, variables: {},
-          w: f ? f.w : 16, h: f ? f.h : 16,
-          hp: o.hp || 0
-        };
-        sim.scene.objects.push(inst);
-        if (f && f.pixelsB64 && window.LumaSpriteEditor
-            && sim.objectSpriteCache && !sim.objectSpriteCache.has(o.spriteFrameId)) {
-          try {
-            const px = window.LumaSpriteEditor.base64ToPixels(f.pixelsB64, f.w * f.h);
-            sim.objectSpriteCache.set(o.spriteFrameId, { w: f.w, h: f.h, pixels: px });
-          } catch (e) {}
-        }
-      } else if (a.type === "destroy_object") {
-        const before = sim.scene.objects.length;
-        const toDestroy = (sim.scene.objects || []).filter(inst => String(inst.objectId) === String(p.object));
-        sim.scene.objects = (sim.scene.objects || []).filter(inst => String(inst.objectId) !== String(p.object));
-        // V1.5.9 — Notifier les events on_object_destroyed
-        for (const inst of toDestroy) {
-          runTriggersOfType("on_object_destroyed", sim, (params) => String(params.object) === String(inst.objectId));
-        }
-      } else if (a.type === "set_variable") {
-        const old = _runtime.variables[p.variable];
-        _runtime.variables[p.variable] = p.value;
-        // V1.5.9 — Notifier on_variable_change si valeur a vraiment changé
-        if (String(old) !== String(p.value)) {
-          runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
-        }
-      } else if (a.type === "add_variable") {
-        const old = Number(_runtime.variables[p.variable] || 0);
-        const nv = old + Number(p.value);
-        _runtime.variables[p.variable] = nv;
-        if (old !== nv) {
-          runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
-        }
-      } else if (a.type === "play_sound") {
-        if (sim.audioCtx) playBeep(sim.audioCtx, p.sound);
-      } else if (a.type === "play_music") {
-        // V1.5.9 — Si le music editor a ce morceau, le démarre
-        if (window.LumaMusicEditor && typeof window.LumaMusicEditor.playByName === "function") {
-          window.LumaMusicEditor.playByName(p.name);
-        } else if (sim.audioCtx) {
-          // Fallback : juste un bip ascendant pour signaler
-          playBeep(sim.audioCtx, "level_up");
-        }
-        sim._musicName = p.name;
-      } else if (a.type === "change_scene") {
-        // V1.5.9 — Diffère le switch à la fin du tick (sécurité re-entry)
-        _runtime.pendingSceneSwitch = { sceneId: p.scene };
-        return { wait: false, sceneSwitch: true }; // stop les actions, le sim s'occupera du switch
-      } else if (a.type === "player_move") {
-        // V1.5.9 — Pousse le joueur dans la direction donnée à vitesse définie
-        const sp = Number(p.speed) || 2;
-        if (p.direction === "up")    sim.player.y -= sp;
-        if (p.direction === "down")  sim.player.y += sp;
-        if (p.direction === "left")  sim.player.x -= sp;
-        if (p.direction === "right") sim.player.x += sp;
-      } else if (a.type === "damage_object") {
-        const amount = Number(p.amount) || 1;
-        const toRemove = [];
-        for (const inst of (sim.scene.objects || [])) {
-          if (String(inst.objectId) === String(p.object)) {
-            inst.hp = (inst.hp || 0) - amount;
-            if (inst.hp <= 0) toRemove.push(inst);
+      try {
+        if (a.type === "create_object") {
+          const o = findObjectDef(p.object);
+          if (!o || !sim.scene) {
+            console.warn("[Event Sheet] create_object impossible, objet introuvable:", p.object);
+            continue;
           }
-        }
-        if (toRemove.length) {
-          sim.scene.objects = sim.scene.objects.filter(i => !toRemove.includes(i));
-          for (const inst of toRemove) {
-            runTriggersOfType("on_object_destroyed", sim, (params) => String(params.object) === String(inst.objectId));
+          const f = (window.frames || []).find(fr => String(fr.id) === String(o.spriteFrameId));
+          const inst = {
+            objectId: o.id,
+            instanceName: `${o.name}_${Date.now()}_${Math.floor(Math.random()*1000)}`,
+            x: resolveValue(p.x, sim, 0),
+            y: resolveValue(p.y, sim, 0),
+            layer: "objects", enabled: true, variables: {},
+            w: f ? f.w : 16, h: f ? f.h : 16,
+            hp: Number(o.hp || 0),
+            type: o.type,
+            behavior: o.behavior,
+            solid: !!o.solid,
+            properties: JSON.parse(JSON.stringify(o.properties || {}))
+          };
+          sim.scene.objects.push(inst);
+          if (f && f.pixelsB64 && window.LumaSpriteEditor
+              && sim.objectSpriteCache && !sim.objectSpriteCache.has(o.spriteFrameId)) {
+            try {
+              const px = window.LumaSpriteEditor.base64ToPixels(f.pixelsB64, f.w * f.h);
+              sim.objectSpriteCache.set(o.spriteFrameId, { w: f.w, h: f.h, pixels: px });
+            } catch (e) {}
           }
+        } else if (a.type === "destroy_object") {
+          const ref = resolveObjectRef(p.object, sim);
+          if (ref.kind === "player") {
+            sim.player.dead = true;
+            sim.player.visible = false;
+          } else {
+            const toDestroy = ref.target;
+            sim.scene.objects = ensureSceneObjects(sim).filter(inst => !toDestroy.includes(inst));
+            for (const inst of toDestroy) {
+              runTriggersOfType("on_object_destroyed", sim, (params) => String(params.object) === String(inst.objectId));
+            }
+          }
+        } else if (a.type === "set_variable") {
+          const old = _runtime.variables[p.variable];
+          _runtime.variables[p.variable] = p.value;
+          if (String(old) !== String(p.value)) {
+            runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
+          }
+        } else if (a.type === "add_variable") {
+          const old = Number(_runtime.variables[p.variable] || 0);
+          const nv = old + Number(p.value || 0);
+          _runtime.variables[p.variable] = nv;
+          if (old !== nv) {
+            runTriggersOfType("on_variable_change", sim, (params) => params.variable === p.variable);
+          }
+        } else if (a.type === "play_sound") {
+          if (sim.audioCtx) playBeep(sim.audioCtx, p.sound);
+        } else if (a.type === "play_music") {
+          if (window.LumaMusicEditor && typeof window.LumaMusicEditor.playByName === "function") {
+            window.LumaMusicEditor.playByName(p.name);
+          } else if (sim.audioCtx) {
+            playBeep(sim.audioCtx, "level_up");
+          }
+          sim._musicName = p.name;
+        } else if (a.type === "change_scene") {
+          _runtime.pendingSceneSwitch = { sceneId: p.scene };
+          return { wait: false, sceneSwitch: true };
+        } else if (a.type === "player_move") {
+          const sp = Number(p.speed) || 2;
+          if (!sim.player) continue;
+          if (p.direction === "up")    sim.player.y -= sp;
+          if (p.direction === "down")  sim.player.y += sp;
+          if (p.direction === "left")  sim.player.x -= sp;
+          if (p.direction === "right") sim.player.x += sp;
+        } else if (a.type === "damage_object") {
+          const amount = Number(p.amount) || 1;
+          const ref = resolveObjectRef(p.object, sim);
+          if (ref.kind === "player") {
+            sim.player.hp = Number(sim.player.hp || _runtime.variables.hp || 3) - amount;
+            _runtime.variables.hp = sim.player.hp;
+          } else {
+            const toRemove = [];
+            for (const inst of ref.target) {
+              inst.hp = Number(inst.hp || 0) - amount;
+              if (inst.hp <= 0) toRemove.push(inst);
+            }
+            if (toRemove.length) {
+              sim.scene.objects = ensureSceneObjects(sim).filter(i => !toRemove.includes(i));
+              for (const inst of toRemove) {
+                runTriggersOfType("on_object_destroyed", sim, (params) => String(params.object) === String(inst.objectId));
+              }
+            }
+          }
+        } else if (a.type === "show_dialogue") {
+          sim.dialogue = String(p.text || "");
+          setTimeout(() => { if (sim.dialogue === String(p.text || "")) sim.dialogue = null; }, 3000);
+        } else if (a.type === "log_debug") {
+          console.log("[Event Sheet]", p.text);
+        } else if (a.type === "camera_shake") {
+          sim._shake = { remaining: Number(p.duration || 0.3) * 1000, intensity: Number(p.intensity || 4) };
+        } else if (a.type === "wait") {
+          const remaining = Number(p.seconds || 0.5) * 1000;
+          const continuation = actions.slice(i + 1);
+          return { wait: true, remaining, continuation };
+        } else {
+          console.warn("[Event Sheet] Action non supportée:", a.type);
         }
-      } else if (a.type === "show_dialogue") {
-        sim.dialogue = String(p.text || "");
-        // auto-clear après 3s
-        setTimeout(() => { if (sim.dialogue === p.text) sim.dialogue = null; }, 3000);
-      } else if (a.type === "log_debug") {
-        console.log("[Event Sheet]", p.text);
-      } else if (a.type === "camera_shake") {
-        sim._shake = { remaining: Number(p.duration || 0.3) * 1000, intensity: Number(p.intensity || 4) };
-      } else if (a.type === "wait") {
-        const remaining = Number(p.seconds || 0.5) * 1000;
-        const continuation = actions.slice(i + 1);
-        return { wait: true, remaining, continuation };
+      } catch (err) {
+        console.warn("[Event Sheet] Action ignorée à cause d'une erreur:", a, err);
       }
     }
     return { wait: false };
